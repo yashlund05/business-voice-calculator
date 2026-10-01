@@ -41,10 +41,14 @@ ZERO_REQUIRES_CONFIRMATION: bool = True
 MAX_CONSECUTIVE_RECOGNITION_ERRORS: int = 5
 UI_POLL_INTERVAL_MS: int = 50  # Tkinter after() poll interval
 
-# --- Directory Names (Git-ignored local storage per architecture.md §4, §13) ---
+# --- Directory Names & Model Paths (Git-ignored local storage per architecture.md §4, §13) ---
 LOG_DIR_PATH: Path = PROJECT_ROOT / "logs"
 DATA_DIR_PATH: Path = PROJECT_ROOT / "data"
 MODELS_DIR_PATH: Path = PROJECT_ROOT / "models"
+
+import os
+VOSK_DEFAULT_MODEL_NAME: str = "vosk-model-small-en-us"
+VOSK_MODEL_PATH: Path = Path(os.environ.get("VOICE_CALC_VOSK_MODEL_PATH", MODELS_DIR_PATH / VOSK_DEFAULT_MODEL_NAME))
 
 
 @dataclass(frozen=True)
@@ -63,3 +67,4 @@ class AppConfig:
     log_dir: Path = LOG_DIR_PATH
     data_dir: Path = DATA_DIR_PATH
     models_dir: Path = MODELS_DIR_PATH
+    vosk_model_path: Path = VOSK_MODEL_PATH

@@ -1,5 +1,6 @@
-# Voice Calculator Dependencies (Phase 1C Audio Foundation)
-# Heavy ML / ASR / VAD dependencies will be introduced in their respective phases.
+# Voice Calculator Dependencies (Phase 2.2 Vosk Baseline)
+# Heavy ML / Whisper / VAD / PyTorch dependencies belong to later phases.
 pytest==8.3.4
 sounddevice==0.5.6
 numpy==2.4.6
+vosk==0.3.45

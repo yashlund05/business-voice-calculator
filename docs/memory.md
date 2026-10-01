@@ -7,16 +7,16 @@
 
 ## 1. Project Status
 
-- **Overall status:** Phase 2.1 (ASR Interface and WAV I/O) completed. All 203 automated unit tests passing.
+- **Overall status:** Phase 2.2 (Vosk Baseline ASR Engine) completed. 213 unit/mock tests passing, 1 integration test skipped pending local model download.
 - **Last updated:** 2026-10-01 by Antigravity
 
 ## 2. Current Phase
 
-- Phase: **Phase 2 — ASR Interface and Prerecorded-Audio Baseline** (Subtask 2.1 completed; ready for Subtask 2.2).
+- Phase: **Phase 2 — ASR Interface and Prerecorded-Audio Baseline** (Subtasks 2.1 and 2.2 completed; ready for Subtask 2.3).
 
 ## 3. Current Task
 
-- Phase 2.1 completed. Next: Phase 2, subtask 2.2 (`asr/vosk_engine.py` baseline implementation).
+- Phase 2.2 completed. Next: Phase 2, subtask 2.3 (`tools/record_dataset.py` recording helper).
 
 ## 4. Completed Work
 
@@ -27,12 +27,13 @@
 - [1B Number Parser Implementation & Audit] Implemented `src/voice_calculator/numparse.py` with pure deterministic grammar parser, normalization, and reason code classification. Added `tests/test_numparse_cases.py` and `tests/test_numparse_exhaustive.py` (exhaustive 0–2000 canonical words, 0–2000 digit strings, boundary values, invariants, and fuzz testing).
 - [1C Audio Input Foundation] Built `src/voice_calculator/audio/capture.py` providing `AudioFrame`, `AudioSource` protocol, `MicrophoneCapture` (via `sounddevice`), `FakeAudioSource`, and typed errors (`MicNotFound`, `MicLost`, `MicBusy`, `StreamError`). Added `tests/test_audio_capture.py` and `tools/check_mic.py`.
 - [2.1 ASR Interface & WAV I/O] Implemented `ASREngine` protocol, `ASRResult` dataclass, typed exceptions (`ASRError`, `ModelMissingError`, `ModelLoadError`), and deterministic `FakeEngine` in `src/voice_calculator/asr/base.py`. Built strict 16 kHz mono int16 WAV reader/writer `src/voice_calculator/audio/wavio.py` using stdlib `wave`. Added `tests/test_asr_base.py` and `tests/test_wavio.py`.
+- [2.2 Vosk Baseline Engine] Built `src/voice_calculator/asr/vosk_engine.py` integrating Vosk offline ASR with constrained number-word grammar, local model path configuration (`VOSK_MODEL_PATH`), explicit loading, typed error mapping, and uncalibrated confidence handling. Added `tests/test_vosk_engine.py` (10 unit tests + 1 model-skip integration test) and `tools/check_vosk.py`.
 
 ## 5. Current Architecture (as implemented)
 
 - Architecture foundation laid per `architecture.md`.
-- Modules that exist in code: `voice_calculator.config`, `voice_calculator.logging_setup`, `voice_calculator.numparse`, `voice_calculator.audio.capture`, `voice_calculator.audio.wavio`, `voice_calculator.asr.base`.
-- Chosen ASR engine: **none yet** (baseline plan: Vosk + constrained grammar, pending Phase 3 ADR; `FakeEngine` available for testing).
+- Modules that exist in code: `voice_calculator.config`, `voice_calculator.logging_setup`, `voice_calculator.numparse`, `voice_calculator.audio.capture`, `voice_calculator.audio.wavio`, `voice_calculator.asr.base`, `voice_calculator.asr.vosk_engine`.
+- Chosen ASR engine: **Vosk small English + constrained grammar baseline** (pending Phase 3 benchmark evaluation and ADR).
 - VAD: **none yet** (plan: energy baseline).
 - Auto-accept policy: **off** (confirm-all) by default (`AUTO_ACCEPT_ENABLED = False`).
 
@@ -49,6 +50,7 @@
 | 7 | Parser is pure and deterministic: normalization strips harmless trailing `. ? !`, rejects internal punctuation, evaluates explicit grammar without token accumulation | 2026-10-01 | Phase 1B implementation |
 | 8 | Audio capture uses sounddevice (16 kHz mono int16) with bounded queue and non-blocking callback; hardware-independent tests use FakeAudioSource and mocks | 2026-10-01 | Phase 1C implementation |
 | 9 | ASR engine abstraction uses ASREngine protocol and ASRResult dataclass; WAV I/O uses stdlib wave strictly validated to 16 kHz mono int16 PCM | 2026-10-01 | Phase 2.1 implementation |
+| 10 | Vosk ASR baseline uses local model directory (never auto-downloaded) with constrained grammar (`DEFAULT_NUMBER_GRAMMAR`), setting uncalibrated confidence to None | 2026-10-01 | Phase 2.2 implementation |
 
 ## 7. Pending Decisions
 
@@ -70,19 +72,19 @@
 
 ## 9. Test Status
 
-- Automated tests: **203 passed** (`pytest -v`).
-- Last test command/result: `.\.venv\Scripts\pytest.exe -v` -> 203 passed in 1.30s (test_asr_base: 7, test_audio_capture: 9, test_config: 4, test_logging: 3, test_numparse_cases: 158, test_numparse_exhaustive: 10, test_smoke: 2, test_wavio: 10).
-- Manual tests: `tools/check_mic.py` verified live device enumeration and 16 kHz stream capture on Windows.
+- Automated tests: **213 passed, 1 skipped** (`pytest -v`).
+- Last test command/result: `.\.venv\Scripts\pytest.exe -v` -> 213 passed, 1 skipped in 2.38s (test_asr_base: 7, test_audio_capture: 9, test_config: 4, test_logging: 3, test_numparse_cases: 158, test_numparse_exhaustive: 10, test_smoke: 2, test_vosk_engine: 10 passed + 1 skipped, test_wavio: 10).
+- Manual tests: `tools/check_vosk.py` verified path checking and clear missing model instructions; `tools/check_mic.py` verified live 16 kHz capture.
 
 ## 10. Benchmark Status
 
-- **No benchmarks run. No accuracy, latency, or resource numbers exist.** Dataset not yet recorded.
+- **No benchmarks run. No accuracy, latency, or resource numbers exist.** Baseline ASR benchmark is pending labeled dataset collection (Phase 2.3 / Phase 3).
 - See `research.md` for templates.
 
 ## 11. Important Lessons
 
-- WAV format validation using stdlib `wave` ensures offline compatibility with zero extra audio file dependencies.
-- `FakeEngine` cleanly decouples test execution from external ML binaries, keeping all automated testing fast, deterministic, and hardware-independent.
+- Vosk model weights must never be downloaded automatically at runtime; checking local model existence and raising typed `ModelMissingError` ensures reliable offline behavior.
+- Constraining Vosk grammar to the project's number-word closed vocabulary limits hallucination of general conversational words while leaving semantic parsing to `numparse.py`.
 
 ## 12. Dependencies Added (with justification)
 
@@ -91,20 +93,21 @@
 | pytest | 8.3.4 | Test framework | Automated unit and property testing; standard test runner | Phase 0 |
 | sounddevice | 0.5.6 | Audio capture | Low-latency, reliable PortAudio Python bindings for Windows | Phase 1C |
 | numpy | 2.4.6 | Buffer operations | Efficient audio buffer representation for sounddevice | Phase 1C |
+| vosk | 0.3.45 | Offline ASR | Candidate ASR baseline engine for English speech recognition | Phase 2.2 |
 
 ## 13. Next Task
 
-- **Phase 2, subtask 2.2 — Vosk baseline** (`phases.md`): `VoskEngine` with constrained number-word grammar, local model path from config, no auto-download, clear `ModelMissingError`, test with fake/skip marker when model absent.
+- **Phase 2, subtask 2.3 — Dataset recording helper** (`phases.md`): `tools/record_dataset.py` for guided user audio prompt recording to git-ignored `data/recordings/` with `labels.csv`.
 
 ## 14. Files Changed Recently
 
-- `src/voice_calculator/asr/base.py` — new — ASREngine protocol, ASRResult dataclass, FakeEngine (Phase 2.1)
-- `src/voice_calculator/asr/__init__.py` — new — ASR package exports (Phase 2.1)
-- `src/voice_calculator/audio/wavio.py` — new — WAV read/write helper for 16 kHz mono 16-bit PCM (Phase 2.1)
-- `tests/test_asr_base.py` — new — unit tests for ASR abstraction & FakeEngine (Phase 2.1)
-- `tests/test_wavio.py` — new — unit tests for WAV read/write & format rejection (Phase 2.1)
-- `src/voice_calculator/audio/__init__.py` — modified — exported wavio helpers (Phase 2.1)
-- `docs/memory.md` — modified — updated with Phase 2.1 completion and test results
+- `src/voice_calculator/asr/vosk_engine.py` — new — VoskEngine with constrained grammar (Phase 2.2)
+- `tests/test_vosk_engine.py` — new — unit and integration tests for VoskEngine (Phase 2.2)
+- `tools/check_vosk.py` — new — manual Vosk model diagnostic tool (Phase 2.2)
+- `requirements.txt` — modified — pinned vosk==0.3.45 (Phase 2.2)
+- `src/voice_calculator/config.py` — modified — added VOSK_MODEL_PATH configuration (Phase 2.2)
+- `src/voice_calculator/asr/__init__.py` — modified — exported VoskEngine and grammar helper (Phase 2.2)
+- `docs/memory.md` — modified — updated with Phase 2.2 completion and test status
 
 ## 15. Do Not Change Casually (requires explicit user approval)
 
