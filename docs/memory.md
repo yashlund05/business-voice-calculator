@@ -7,46 +7,46 @@
 
 ## 1. Project Status
 
-- **Overall status:** NOT YET IMPLEMENTED (documentation only).
-- **Last updated:** (date) by (agent/user)
+- **Overall status:** Phase 0 (Foundation) completed. Application logic not yet implemented.
+- **Last updated:** 2026-10-01 by Antigravity
 
 ## 2. Current Phase
 
-- Phase: **0 — Repository and environment foundation** (not started)
+- Phase: **Phase 0 complete**; ready for **Phase 1 — Strict Deterministic Number Parser**.
 
 ## 3. Current Task
 
-- None in progress.
+- Phase 0 completed. Ready for Phase 1, subtask 1.1 (Test corpus first).
 
 ## 4. Completed Work
 
 - Documentation pack created (`docs/prd.md`, `architecture.md`, `rules.md`, `phases.md`, `design.md`, `memory.md`, `research.md`).
-- (No code, tests, or experiments completed yet.)
-
-_Template for new entries:_ `- [Phase.Subtask] <what was done> — commit <hash>`
+- [0.1 Skeleton] Established virtual environment (Python 3.11.9), `.gitignore`, `pyproject.toml`, `requirements.txt`, `README.md`, package structure `src/voice_calculator/__init__.py`.
+- [0.2 Config & logging] Implemented `config.py` constants and tunables, `logging_setup.py` with privacy-safe rotating file logging; added tests in `tests/test_config.py`, `tests/test_logging.py`, and `tests/test_smoke.py`.
 
 ## 5. Current Architecture (as implemented)
 
-- Not implemented. Intended architecture: `architecture.md`.
-- Modules that exist in code: _none_.
+- Architecture foundation laid per `architecture.md`.
+- Modules that exist in code: `voice_calculator.config`, `voice_calculator.logging_setup`.
 - Chosen ASR engine: **none yet** (baseline plan: Vosk + constrained grammar, pending Phase 3 ADR).
 - VAD: **none yet** (plan: energy baseline).
-- Auto-accept policy: **off** (confirm-all) by default.
+- Auto-accept policy: **off** (confirm-all) by default (`AUTO_ACCEPT_ENABLED = False`).
 
 ## 6. Confirmed Decisions
 
 | # | Decision | Date | Source/Reason |
 |---|----------|------|---------------|
-| 1 | Windows desktop, Python, offline, English, 0–2000, addition only, buttons only, no voice commands | — | `prd.md` (FIXED requirements) |
-| 2 | Parser and arithmetic are deterministic; no LLM | — | `rules.md` §C |
-| 3 | Uncertain recognition is never silently added; default policy is confirm-all until calibrated | — | `architecture.md` §9 |
-| 4 | Tkinter GUI; worker thread + queue model | — | `architecture.md` §11 |
+| 1 | Windows desktop, Python, offline, English, 0–2000, addition only, buttons only, no voice commands | 2026-10-01 | `prd.md` (FIXED requirements) |
+| 2 | Parser and arithmetic are deterministic; no LLM | 2026-10-01 | `rules.md` §C |
+| 3 | Uncertain recognition is never silently added; default policy is confirm-all until calibrated | 2026-10-01 | `architecture.md` §9 |
+| 4 | Tkinter GUI; worker thread + queue model | 2026-10-01 | `architecture.md` §11 |
+| 5 | Python 3.11.9 runtime and pytest 8.3.4 testing framework | 2026-10-01 | Phase 0 verification |
 
 ## 7. Pending Decisions
 
 | # | Question | Default for now | Resolve in |
 |---|----------|-----------------|-----------|
-| P1 | Python version | 3.11+ | Phase 0 |
+| P1 | Python version | **Resolved: 3.11.9** | Phase 0 |
 | P2 | ASR engine/model (Vosk, faster-whisper size, hybrid) | Vosk + grammar baseline | Phase 3 ADR |
 | P3 | VAD choice and timings | energy VAD | Phase 4 |
 | P4 | Auto-accept rules/thresholds | none (confirm-all) | Phase 5 |
@@ -60,13 +60,11 @@ _Template for new entries:_ `- [Phase.Subtask] <what was done> — commit <hash>
 
 - None recorded.
 
-_Template:_ `- [ID] <symptom> — steps — status — regression test: <name or "pending">`
-
 ## 9. Test Status
 
-- Automated tests: **not run — none exist yet.**
-- Last test command/result: _n/a_
-- Manual tests: _none done_
+- Automated tests: **9 passed** (`pytest -v`).
+- Last test command/result: `.\.venv\Scripts\pytest.exe -v` -> 9 passed in 0.09s (test_config: 4, test_logging: 3, test_smoke: 2).
+- Manual tests: None required for Phase 0.
 
 ## 10. Benchmark Status
 
@@ -77,23 +75,29 @@ _Template:_ `- [ID] <symptom> — steps — status — regression test: <name or
 
 - (none yet)
 
-_Template:_ `- <lesson> (Phase.Subtask)`
-
 ## 12. Dependencies Added (with justification)
 
 | Package | Version | Purpose | Why needed / alternative considered | Phase |
 |---------|---------|---------|-------------------------------------|-------|
-| _none yet_ | | | | |
+| pytest | 8.3.4 | Test framework | Automated unit and property testing; standard test runner | Phase 0 |
 
 ## 13. Next Task
 
-- **Phase 0, subtask 0.1 — Skeleton** (`phases.md`).
+- **Phase 1, subtask 1.1 — Test corpus first** (`phases.md`).
 
 ## 14. Files Changed Recently
 
-- `docs/*.md` (initial creation)
-
-_Update with: `path — new/modified — one-line reason` (keep last ~10 entries)._
+- `docs/memory.md` — modified — updated Phase 0 completion state
+- `README.md` — modified — updated setup and testing instructions
+- `src/voice_calculator/config.py` — new — configuration constants & tunables
+- `src/voice_calculator/logging_setup.py` — new — privacy-safe logger setup
+- `src/voice_calculator/__init__.py` — new — package initialization
+- `tests/test_config.py` — new — tests for configuration invariants
+- `tests/test_logging.py` — new — tests for logging behavior
+- `tests/test_smoke.py` — new — smoke test for package import & Python version
+- `pyproject.toml` — new — project metadata & pytest configuration
+- `requirements.txt` — new — pinned Phase 0 testing dependencies
+- `.gitignore` — new — exclusions for venv, caches, models, data, logs
 
 ## 15. Do Not Change Casually (requires explicit user approval)
 
@@ -108,8 +112,8 @@ _Update with: `path — new/modified — one-line reason` (keep last ~10 entries
 
 ## 16. Session Update Checklist (agent)
 
-- [ ] Status/phase/task updated
-- [ ] Completed work and files changed listed
-- [ ] Test status reflects what was *actually run*
-- [ ] New decisions, bugs, dependencies, lessons recorded
-- [ ] Next task set (one subtask)
+- [x] Status/phase/task updated
+- [x] Completed work and files changed listed
+- [x] Test status reflects what was *actually run*
+- [x] New decisions, bugs, dependencies, lessons recorded
+- [x] Next task set (one subtask)

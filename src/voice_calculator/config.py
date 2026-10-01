@@ -1,0 +1,60 @@
+"""Single source of truth for constants and tunable configurations.
+
+All tunables, limits, and system constants live here.
+No other module should define magic numbers or hardcoded tunable constants.
+"""
+
+from pathlib import Path
+from dataclasses import dataclass
+
+# Project Root Directory
+PROJECT_ROOT: Path = Path(__file__).resolve().parent.parent.parent
+
+# --- Number Range (FIXED per prd.md §5, §7) ---
+MIN_NUMBER: int = 0
+MAX_NUMBER: int = 2000
+
+# --- Audio Capture Defaults (DEFAULT per architecture.md §5) ---
+AUDIO_SAMPLE_RATE: int = 16000  # 16 kHz mono
+AUDIO_CHANNELS: int = 1
+AUDIO_DTYPE: str = "int16"
+AUDIO_BLOCK_DURATION_MS: int = 30  # 20-30 ms blocks
+AUDIO_QUEUE_MAX_SECONDS: int = 10
+
+# --- VAD & Segmentation Defaults ([BENCH] per architecture.md §5) ---
+VAD_PRE_ROLL_MS: int = 250
+VAD_HANGOVER_MS: int = 700
+MIN_UTTERANCE_MS: int = 250
+MAX_UTTERANCE_MS: int = 6000
+
+# --- Decision Engine Defaults (DEFAULT per architecture.md §9) ---
+# Safe-by-default policy: every parsed value requires confirmation until calibrated.
+AUTO_ACCEPT_ENABLED: bool = False
+ZERO_REQUIRES_CONFIRMATION: bool = True
+
+# --- Pipeline & Error Recovery Defaults (DEFAULT per architecture.md §6, §12) ---
+MAX_CONSECUTIVE_RECOGNITION_ERRORS: int = 5
+UI_POLL_INTERVAL_MS: int = 50  # Tkinter after() poll interval
+
+# --- Directory Names (Git-ignored local storage per architecture.md §4, §13) ---
+LOG_DIR_PATH: Path = PROJECT_ROOT / "logs"
+DATA_DIR_PATH: Path = PROJECT_ROOT / "data"
+MODELS_DIR_PATH: Path = PROJECT_ROOT / "models"
+
+
+@dataclass(frozen=True)
+class AppConfig:
+    """Immutable application configuration snapshot."""
+
+    min_number: int = MIN_NUMBER
+    max_number: int = MAX_NUMBER
+    audio_sample_rate: int = AUDIO_SAMPLE_RATE
+    audio_channels: int = AUDIO_CHANNELS
+    audio_queue_max_seconds: int = AUDIO_QUEUE_MAX_SECONDS
+    ui_poll_interval_ms: int = UI_POLL_INTERVAL_MS
+    auto_accept_enabled: bool = AUTO_ACCEPT_ENABLED
+    zero_requires_confirmation: bool = ZERO_REQUIRES_CONFIRMATION
+    max_consecutive_errors: int = MAX_CONSECUTIVE_RECOGNITION_ERRORS
+    log_dir: Path = LOG_DIR_PATH
+    data_dir: Path = DATA_DIR_PATH
+    models_dir: Path = MODELS_DIR_PATH
