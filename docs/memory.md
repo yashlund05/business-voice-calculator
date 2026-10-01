@@ -7,7 +7,7 @@
 
 ## 1. Project Status
 
-- **Overall status:** Phase 1 (Deterministic English Number Parser) completed. All 170 unit and exhaustive tests passing.
+- **Overall status:** Phase 1C (Audio Input Foundation) completed. All 186 unit and property tests passing.
 - **Last updated:** 2026-10-01 by Antigravity
 
 ## 2. Current Phase
@@ -16,7 +16,7 @@
 
 ## 3. Current Task
 
-- Phase 1 completed. Next: Phase 2, subtask 2.1 (`asr/base.py`, `audio/wavio.py`, `FakeEngine`).
+- Phase 1C completed. Next: Phase 2, subtask 2.1 (`asr/base.py`, `audio/wavio.py`, `FakeEngine`).
 
 ## 4. Completed Work
 
@@ -24,12 +24,13 @@
 - [0.1 Skeleton] Established virtual environment (Python 3.11.9), `.gitignore`, `pyproject.toml`, `requirements.txt`, `README.md`, package structure `src/voice_calculator/__init__.py`.
 - [0.2 Config & logging] Implemented `config.py` constants and tunables, `logging_setup.py` with privacy-safe rotating file logging; added tests in `tests/test_config.py`, `tests/test_logging.py`, and `tests/test_smoke.py`.
 - [1A Grammar Specification & Clarification] Defined formal grammar specification for 0–2000, unambiguous "and" / "a" rules, 1000–1999 structure, structural vs range error classification, normalization rules, reason codes, parser interface contract, and exhaustive testing plan.
-- [1B Number Parser Implementation] Implemented `src/voice_calculator/numparse.py` with pure deterministic grammar parser, normalization, and reason code classification. Added `tests/test_numparse_cases.py` (documented accepted/rejected cases) and `tests/test_numparse_exhaustive.py` (exhaustive 0–2000 canonical words, 0–2000 digit strings, boundary values, invariants, and 500-iteration random fuzz testing).
+- [1B Number Parser Implementation & Audit] Implemented `src/voice_calculator/numparse.py` with pure deterministic grammar parser, normalization, and reason code classification. Added `tests/test_numparse_cases.py` and `tests/test_numparse_exhaustive.py` (exhaustive 0–2000 canonical words, 0–2000 digit strings, boundary values, invariants, and fuzz testing).
+- [1C Audio Input Foundation] Built `src/voice_calculator/audio/capture.py` providing `AudioFrame`, `AudioSource` protocol, `MicrophoneCapture` (via `sounddevice`), `FakeAudioSource`, and typed errors (`MicNotFound`, `MicLost`, `MicBusy`, `StreamError`). Added `tests/test_audio_capture.py` (9 mock/unit tests) and `tools/check_mic.py` (diagnostic tool).
 
 ## 5. Current Architecture (as implemented)
 
 - Architecture foundation laid per `architecture.md`.
-- Modules that exist in code: `voice_calculator.config`, `voice_calculator.logging_setup`, `voice_calculator.numparse`.
+- Modules that exist in code: `voice_calculator.config`, `voice_calculator.logging_setup`, `voice_calculator.numparse`, `voice_calculator.audio.capture`.
 - Chosen ASR engine: **none yet** (baseline plan: Vosk + constrained grammar, pending Phase 3 ADR).
 - VAD: **none yet** (plan: energy baseline).
 - Auto-accept policy: **off** (confirm-all) by default (`AUTO_ACCEPT_ENABLED = False`).
@@ -45,6 +46,7 @@
 | 5 | Python 3.11.9 runtime and pytest 8.3.4 testing framework | 2026-10-01 | Phase 0 verification |
 | 6 | Number grammar accepts canonical 0–2000, "a hundred/thousand", teen-hundreds (1100–1999), and canonical digit strings; British/Indian English optional "and" constructions; structural scale errors are MALFORMED; valid numbers >2000 evaluate to OUT_OF_RANGE | 2026-10-01 | Phase 1A clarification |
 | 7 | Parser is pure and deterministic: normalization strips harmless trailing `. ? !`, rejects internal punctuation, evaluates explicit grammar without token accumulation | 2026-10-01 | Phase 1B implementation |
+| 8 | Audio capture uses sounddevice (16 kHz mono int16) with bounded queue and non-blocking callback; hardware-independent tests use FakeAudioSource and mocks | 2026-10-01 | Phase 1C implementation |
 
 ## 7. Pending Decisions
 
@@ -66,9 +68,9 @@
 
 ## 9. Test Status
 
-- Automated tests: **177 passed** (`pytest -v`).
-- Last test command/result: `.\.venv\Scripts\pytest.exe -v` -> 177 passed in 0.37s (test_config: 4, test_logging: 3, test_numparse_cases: 158, test_numparse_exhaustive: 10, test_smoke: 2).
-- Manual tests: None required for Phase 1.
+- Automated tests: **186 passed** (`pytest -v`).
+- Last test command/result: `.\.venv\Scripts\pytest.exe -v` -> 186 passed in 0.76s (test_audio_capture: 9, test_config: 4, test_logging: 3, test_numparse_cases: 158, test_numparse_exhaustive: 10, test_smoke: 2).
+- Manual tests: `tools/check_mic.py` verified live device enumeration and 16 kHz stream capture on Windows.
 
 ## 10. Benchmark Status
 
@@ -79,13 +81,15 @@
 
 - Normalization must check for hyphens adjacent to digits (`1-500`) to avoid converting non-canonical digit formats into valid tokens.
 - Multi-number utterances containing multiple scale clauses (e.g. `one hundred two hundred`) must be detected and rejected as `MULTIPLE_NUMBERS`.
-- Red-team audit verified test oracle independence (canonical word generator operates independently from parser logic) and verified fuzz/adversarial robustness.
+- Audio callback must never block; non-blocking bounded queue insertion prevents audio thread stalling during worker backpressure.
 
 ## 12. Dependencies Added (with justification)
 
 | Package | Version | Purpose | Why needed / alternative considered | Phase |
 |---------|---------|---------|-------------------------------------|-------|
 | pytest | 8.3.4 | Test framework | Automated unit and property testing; standard test runner | Phase 0 |
+| sounddevice | 0.5.6 | Audio capture | Low-latency, reliable PortAudio Python bindings for Windows | Phase 1C |
+| numpy | 2.4.6 | Buffer operations | Efficient audio buffer representation for sounddevice | Phase 1C |
 
 ## 13. Next Task
 
@@ -93,15 +97,13 @@
 
 ## 14. Files Changed Recently
 
-- `src/voice_calculator/numparse.py` — new — deterministic English number parser (Phase 1B)
-- `tests/test_numparse_cases.py` — new — unit tests for accepted and rejected cases (Phase 1B)
-- `tests/test_numparse_exhaustive.py` — new — exhaustive 0–2000, boundary, invariant, and fuzz tests (Phase 1B)
-- `docs/memory.md` — modified — updated with Phase 1 completion and test results
-- `docs/architecture.md` — modified — aligned §8 with formal grammar specification
-- `docs/prd.md` — modified — formal grammar specification and unambiguous reason codes in §7
-- `README.md` — modified — updated setup and testing instructions
-- `src/voice_calculator/config.py` — new — configuration constants & tunables
-- `src/voice_calculator/logging_setup.py` — new — privacy-safe logger setup
+- `src/voice_calculator/audio/capture.py` — new — audio frame and microphone capture layer (Phase 1C)
+- `src/voice_calculator/audio/__init__.py` — new — audio package export (Phase 1C)
+- `tests/test_audio_capture.py` — new — unit tests for audio capture & fake audio source (Phase 1C)
+- `tools/check_mic.py` — new — manual audio device diagnostic tool (Phase 1C)
+- `requirements.txt` — modified — pinned sounddevice and numpy dependencies (Phase 1C)
+- `src/voice_calculator/config.py` — modified — added derived audio block and queue sizing constants
+- `docs/memory.md` — modified — updated with Phase 1C completion and test results
 
 ## 15. Do Not Change Casually (requires explicit user approval)
 

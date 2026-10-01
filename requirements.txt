@@ -1,3 +1,5 @@
-# Voice Calculator Phase 0 Dependencies
-# Heavy ML / audio / GUI dependencies will be introduced in their respective phases.
+# Voice Calculator Dependencies (Phase 1C Audio Foundation)
+# Heavy ML / ASR / VAD dependencies will be introduced in their respective phases.
 pytest==8.3.4
+sounddevice==0.5.6
+numpy==2.4.6

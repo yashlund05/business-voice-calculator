@@ -21,6 +21,11 @@ AUDIO_DTYPE: str = "int16"
 AUDIO_BLOCK_DURATION_MS: int = 30  # 20-30 ms blocks
 AUDIO_QUEUE_MAX_SECONDS: int = 10
 
+# Derived audio sizing
+AUDIO_BLOCK_SAMPLES: int = int(AUDIO_SAMPLE_RATE * AUDIO_BLOCK_DURATION_MS / 1000)  # 480 samples @ 16kHz
+AUDIO_BLOCK_BYTES: int = AUDIO_BLOCK_SAMPLES * 2  # 960 bytes for 16-bit mono
+AUDIO_QUEUE_MAX_BLOCKS: int = int((AUDIO_QUEUE_MAX_SECONDS * 1000) / AUDIO_BLOCK_DURATION_MS)  # ~333 blocks
+
 # --- VAD & Segmentation Defaults ([BENCH] per architecture.md §5) ---
 VAD_PRE_ROLL_MS: int = 250
 VAD_HANGOVER_MS: int = 700
