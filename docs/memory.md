@@ -66,8 +66,8 @@
 
 ## 9. Test Status
 
-- Automated tests: **170 passed** (`pytest -v`).
-- Last test command/result: `.\.venv\Scripts\pytest.exe -v` -> 170 passed in 0.46s (test_config: 4, test_logging: 3, test_numparse_cases: 156, test_numparse_exhaustive: 5, test_smoke: 2).
+- Automated tests: **177 passed** (`pytest -v`).
+- Last test command/result: `.\.venv\Scripts\pytest.exe -v` -> 177 passed in 0.37s (test_config: 4, test_logging: 3, test_numparse_cases: 158, test_numparse_exhaustive: 10, test_smoke: 2).
 - Manual tests: None required for Phase 1.
 
 ## 10. Benchmark Status
@@ -79,6 +79,7 @@
 
 - Normalization must check for hyphens adjacent to digits (`1-500`) to avoid converting non-canonical digit formats into valid tokens.
 - Multi-number utterances containing multiple scale clauses (e.g. `one hundred two hundred`) must be detected and rejected as `MULTIPLE_NUMBERS`.
+- Red-team audit verified test oracle independence (canonical word generator operates independently from parser logic) and verified fuzz/adversarial robustness.
 
 ## 12. Dependencies Added (with justification)
 

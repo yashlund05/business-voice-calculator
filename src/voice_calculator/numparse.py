@@ -155,9 +155,11 @@ def _normalize_raw_input(text: str) -> Tuple[Optional[str], Optional[RejectReaso
     if not stripped:
         return None, RejectReason.EMPTY
 
-    # Reject unsupported prefix operators on numbers
-    if stripped.startswith("+") or stripped.startswith("-"):
-        return None, RejectReason.UNSUPPORTED
+    # Reject unsupported prefix operators on numbers (e.g. "+50", "-5")
+    if stripped.startswith(("+", "-")):
+        if any(c.isalnum() for c in stripped):
+            return None, RejectReason.UNSUPPORTED
+        return None, RejectReason.MALFORMED
 
     # Check for internal decimals or commas
     if "." in stripped[:-1]:
