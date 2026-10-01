@@ -148,18 +148,23 @@ The interface is the only coupling between recognition and the rest of the app. 
 
 ## 8. Number Parser and Validation Design
 
-- `numparse.parse(text: str) -> ParseResult` — pure, deterministic, no ML. Spec of accepted/rejected forms: `prd.md` §7.
-- Steps: normalize (lowercase, strip punctuation, hyphens→spaces, collapse spaces) → if a canonical digit string, validate as integer 0–2000 → else tokenize against a closed vocabulary (unknown token → `NOT_A_NUMBER`) → parse with an explicit grammar → range check.
-- Grammar sketch (informational; tests are authoritative):
-  ```
-  number   := "zero"
-            | [ thousands ] [ hundreds ] [ "and" ] [ below100 ]   (see rules)
-  forms    : below100 | H hundred [and below100] | T teen hundred [and below100] (T in 11..19)
-           | (one|a) thousand [ [and] H hundred ] [ [and] below100 ] | two thousand (exactly)
-  ```
-- Every rejection returns a **reason code**: `NOT_A_NUMBER`, `OUT_OF_RANGE`, `MALFORMED`, `AMBIGUOUS`, `MULTIPLE_NUMBERS`, `UNSUPPORTED`, `EMPTY`.
-- Never returns a "best guess". Never raises on bad text; returns a rejection.
-- Tests: exhaustive generation of canonical word forms for 0–2000 (round trip), explicit variants, explicit rejection list, fuzz test (random token sequences never return a value unless the sequence matches the grammar).
+- `numparse.parse(text: str) -> ParseResult` — pure, deterministic, no ML. Authoritative specification of accepted/rejected forms: `prd.md` §7.
+- **Pipeline:**
+  1. **Normalize:** Strip leading/trailing whitespace. If empty → `EMPTY`. Lowercase text. Convert hyphens to spaces (`forty-five` → `forty five`). Strip harmless sentence-final punctuation (`.`, `?`, `!`) only if trailing; reject on internal punctuation (e.g. `15.0`, `1,500`). Collapse whitespace.
+  2. **Canonical Digit Check:** If the string is pure ASCII digits, validate canonical integer format (no leading zeros except `0`, range 0–2000). Reject with `OUT_OF_RANGE` if >2000, `MALFORMED` if non-canonical (e.g. `007`).
+  3. **Tokenize:** Tokenize against closed vocabulary. Any unrecognized token (e.g. `hello`, `undo`, `dollars`) → `NOT_A_NUMBER`. Decimals/negatives/fractions → `UNSUPPORTED`.
+  4. **Grammar Parse:** Evaluate against deterministic English number grammar:
+     - `zero` → 0
+     - `below100`: `1..19` or `tens` (20..90) or `tens + unit` (21..99).
+     - `hundreds`: `(one|two|...|nine|a) hundred [ [and] below100 ]`
+     - `teen_hundreds`: `(eleven|twelve|...|nineteen) hundred [ [and] below100 ]`
+     - `thousands`: `(one|a) thousand [ [and] (one|two|...|nine) hundred ] [ [and] below100 ]` or `(one|a) thousand [and] below100` or `two thousand`
+     - Grammatically valid numerical phrases evaluating to >2000 (e.g. `two thousand and one`, `three thousand`) evaluate to integer and then return `OUT_OF_RANGE`.
+     - Structural violations (e.g. `ten hundred`, `hundred`, `thousand`, `forty and five`, `hundred and`) → `MALFORMED`.
+     - Disconnected / ambiguous readings (`twenty twenty`, `fifteen fifty`, `one two three`) → `AMBIGUOUS` / `MULTIPLE_NUMBERS`.
+- **Reason codes:** `EMPTY`, `NOT_A_NUMBER`, `OUT_OF_RANGE`, `UNSUPPORTED`, `MALFORMED`, `AMBIGUOUS`, `MULTIPLE_NUMBERS`.
+- **Invariants:** Pure function, no I/O, no network, no unhandled exceptions on arbitrary input.
+- **Tests:** Exhaustive generation of canonical word forms for 0–2000 (round trip), linguistic variants ("a" forms, optional "and", teen-hundreds), boundary values, comprehensive rejection corpus, and invariant/fuzz tests.
 
 ## 9. Decision Engine (ACCEPT / CONFIRM / REJECT)
 
