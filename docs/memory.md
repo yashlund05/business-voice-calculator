@@ -7,16 +7,16 @@
 
 ## 1. Project Status
 
-- **Overall status:** Phase 3.5 (Calculator State, History & Undo) completed. 323 unit/mock tests passing, 1 integration test skipped pending local model download.
+- **Overall status:** Phase 3.6A (Desktop GUI Shell) completed. 336 unit/mock tests passing, 1 integration test skipped pending local model download.
 - **Last updated:** 2026-10-01 by Antigravity
 
 ## 2. Current Phase
 
-- Phase: **Phase 3 — ASR Benchmark and Architecture Decision** (Subtasks 3.1, 3.2, 3.3, 3.4, and 3.5 completed).
+- Phase: **Phase 3 — ASR Benchmark and Architecture Decision** (Subtasks 3.1, 3.2, 3.3, 3.4, 3.5, and 3.6A completed).
 
 ## 3. Current Task
 
-- Phase 3.5 completed. Next: Phase 3.6 (Candidate Whisper engine / benchmark evaluation and ASR ADR).
+- Phase 3.6A completed. Next: Phase 3.6B (Candidate Whisper engine / benchmark evaluation and ASR ADR).
 
 ## 4. Completed Work
 
@@ -34,11 +34,12 @@
 - [3.3 Single-Utterance Audio Processing Pipeline Orchestration] Implemented `voice_calculator.pipeline` (`AudioPipeline`, `PipelineResult`, `PipelineStatus`). Connects `AudioSource` -> `UtteranceSegmenter` -> `ASREngine` -> `numparse.parse()` with typed error handling, candidate emission without arithmetic addition, flush/reset mechanisms, and zero arithmetic logic. Added 15 comprehensive unit tests in `tests/test_pipeline.py`.
 - [3.4 Candidate Safety & Decision Layer] Implemented `voice_calculator.decision` (`DecisionType`, `DecisionReason`, `DecisionResult`, `DecisionConfig`, `SafetyDecisionEngine`, `evaluate_candidate`). Evaluates PipelineResult into ACCEPT, REPEAT, REJECT with strict value masking (value=None on non-accepts), confirm-by-default policy, zero confirmation enforcement, uncalibrated confidence handling, and zero arithmetic logic. Added 21 comprehensive unit/invariant tests in `tests/test_decision.py`.
 - [3.5 Calculator State, History & Undo] Implemented `voice_calculator.calculator` (`Calculator`, `HistoryEntry`, `CalculatorError`, `InvalidValueError`). Maintains running total strictly derived from immutable history entries, LIFO reversible `undo()`, state `reset()`, and strict integer validation (0–2000 range, rejecting floats, booleans, negative values) with zero dependencies on audio/ASR/VAD/GUI/parser. Added 31 comprehensive unit/invariant tests in `tests/test_calculator.py`.
+- [3.6A Desktop GUI Shell] Implemented `voice_calculator.gui` (`VoiceCalculatorApp`, `UIState`, `STATE_COLORS`, `STATE_TEXTS`, `format_number`, `get_decision_feedback_message`). Built responsive Tkinter window with prominent hero running total display (56pt bold), physical Start/Stop/Undo/Clear controls, explicit status indicator bar, in-place candidate confirmation prompt (`Add <N>` / `Discard`), and scrollable recent additions list. Added 13 comprehensive unit/interaction tests in `tests/test_gui.py`.
 
 ## 5. Current Architecture (as implemented)
 
 - Architecture foundation laid per `architecture.md`.
-- Modules that exist in code: `voice_calculator.config`, `voice_calculator.logging_setup`, `voice_calculator.numparse`, `voice_calculator.audio.capture`, `voice_calculator.audio.wavio`, `voice_calculator.audio.vad`, `voice_calculator.audio.segmenter`, `voice_calculator.asr.base`, `voice_calculator.asr.vosk_engine`, `voice_calculator.benchmark`, `voice_calculator.pipeline`, `voice_calculator.decision`, `voice_calculator.calculator`.
+- Modules that exist in code: `voice_calculator.config`, `voice_calculator.logging_setup`, `voice_calculator.numparse`, `voice_calculator.audio.capture`, `voice_calculator.audio.wavio`, `voice_calculator.audio.vad`, `voice_calculator.audio.segmenter`, `voice_calculator.asr.base`, `voice_calculator.asr.vosk_engine`, `voice_calculator.benchmark`, `voice_calculator.pipeline`, `voice_calculator.decision`, `voice_calculator.calculator`, `voice_calculator.gui`.
 - Chosen ASR engine: **Vosk small English + constrained grammar baseline** (pending Phase 3 benchmark evaluation and ADR).
 - VAD: **EnergyVAD baseline (500.0 RMS threshold, 250ms pre-roll, 700ms hangover, 250ms min utterance, 6000ms max utterance)** (pending calibration on real recordings).
 - Auto-accept policy: **off** (confirm-all) by default (`AUTO_ACCEPT_ENABLED = False`).
@@ -63,6 +64,7 @@
 | 14 | AudioPipeline orchestrator coordinates AudioSource -> UtteranceSegmenter -> ASREngine -> numparse.parse() with dependency injection; emits candidate PARSED results without performing arithmetic additions; preserves clean separation of parsing from decision engine | 2026-10-01 | Phase 3.3 implementation |
 | 15 | SafetyDecisionEngine classifies PipelineResults into ACCEPT, REPEAT, REJECT with strict value masking (value=None on non-accepts), confirm-by-default policy, zero confirmation enforcement, uncalibrated confidence handling, and zero arithmetic logic | 2026-10-01 | Phase 3.4 implementation |
 | 16 | Calculator domain layer maintains deterministic running total derived strictly from immutable HistoryEntry records, reversible LIFO undo(), state reset(), and strict 0–2000 integer validation with zero audio/ASR/VAD/GUI/parser dependencies | 2026-10-01 | Phase 3.5 implementation |
+| 17 | VoiceCalculatorApp Tkinter desktop shell provides prominent running total display, physical Start/Stop/Undo/Clear controls, explicit UIState indicators, and in-place candidate confirmation prompt; strictly isolates GUI from recognition heuristics and arithmetic calculation | 2026-10-01 | Phase 3.6A implementation |
 
 ## 7. Pending Decisions
 
@@ -84,12 +86,12 @@
 
 ## 9. Test Status
 
-- Automated tests: **323 passed, 1 skipped** (`pytest -v`).
-- Last test command/result: `.\.venv\Scripts\pytest.exe -v` -> 323 passed, 1 skipped in 1.24s (test_asr_base: 7, test_audio_capture: 9, test_benchmark: 22, test_calculator: 31, test_config: 5, test_decision: 21, test_logging: 3, test_numparse_cases: 158, test_numparse_exhaustive: 10, test_pipeline: 15, test_segmenter: 12, test_smoke: 2, test_vad: 8, test_vosk_engine: 10 passed + 1 skipped, test_wavio: 10).
+- Automated tests: **336 passed, 1 skipped** (`pytest -v`).
+- Last test command/result: `.\.venv\Scripts\pytest.exe -v` -> 336 passed, 1 skipped in 2.16s (test_asr_base: 7, test_audio_capture: 9, test_benchmark: 22, test_calculator: 31, test_config: 5, test_decision: 21, test_gui: 13, test_logging: 3, test_numparse_cases: 158, test_numparse_exhaustive: 10, test_pipeline: 15, test_segmenter: 12, test_smoke: 2, test_vad: 8, test_vosk_engine: 10 passed + 1 skipped, test_wavio: 10).
 
 ## 10. Benchmark Status
 
-- **No live speech recordings run yet.** Benchmark harness, dataset recording helper, VAD segmentation, single-utterance pipeline orchestration, safety decision engine, and calculator domain core are fully implemented and verified with synthetic tests. Actual accuracy, latency, and resource metrics are pending real speech recording session.
+- **No live speech recordings run yet.** Benchmark harness, dataset recording helper, VAD segmentation, single-utterance pipeline orchestration, safety decision engine, calculator domain core, and desktop GUI shell are fully implemented and verified with synthetic/headless tests. Actual accuracy, latency, and resource metrics are pending real speech recording session.
 - See `research.md` for metrics and templates.
 
 ## 11. Important Lessons
@@ -102,6 +104,7 @@
 - Pipeline orchestration layer must not perform arithmetic operations (running total, addition); it cleanly maps raw audio frames through segmentation, ASR, and parsing into typed candidate results for subsequent decision processing.
 - Candidate parsed result != automatic addition. Masking the integer value to `None` on all non-accepts (REPEAT, REJECT) provides structural defense-in-depth against accidental addition of unvalidated values.
 - Calculator domain layer must strictly receive validated integer values from upstream callers, never raw speech transcripts or PipelineResults, isolating arithmetic logic completely from recognition heuristics.
+- Tkinter GUI shell should use dependency injection with Calculator and SafetyDecisionEngine to ensure headless testability without hardware audio dependencies.
 
 ## 12. Dependencies Added (with justification)
 
@@ -114,15 +117,17 @@
 
 ## 13. Next Task
 
-- **Phase 3.6 — Candidate Whisper Engine / Benchmark Evaluation**: Implement `WhisperEngine` (`faster-whisper`), evaluate Vosk vs Whisper on recorded dataset, and write ADR in `docs/research.md`.
+- **Phase 3.6B — Candidate Whisper Engine / Benchmark Evaluation**: Implement `WhisperEngine` (`faster-whisper`), evaluate Vosk vs Whisper on recorded dataset, and write ADR in `docs/research.md`.
 
 ## 14. Files Changed Recently
 
-- `src/voice_calculator/calculator.py` — new — Calculator, HistoryEntry, CalculatorError, InvalidValueError (Phase 3.5)
-- `src/voice_calculator/__init__.py` — modified — exported calculator types (Phase 3.5)
-- `tests/test_calculator.py` — new — 31 unit and invariant tests for calculator domain state (Phase 3.5)
-- `docs/architecture.md` — modified — documented calculator domain core and architectural boundary (Phase 3.5)
-- `docs/memory.md` — modified — updated with Phase 3.5 status and test results (Phase 3.5)
+- `src/voice_calculator/gui/app.py` — new — VoiceCalculatorApp Tkinter desktop application shell (Phase 3.6A)
+- `src/voice_calculator/gui/messages.py` — new — UIState, STATE_COLORS, STATE_TEXTS, format_number, get_decision_feedback_message (Phase 3.6A)
+- `src/voice_calculator/gui/__init__.py` — new — exported GUI classes (Phase 3.6A)
+- `src/voice_calculator/__init__.py` — modified — exported VoiceCalculatorApp and UIState (Phase 3.6A)
+- `tests/test_gui.py` — new — 13 unit/interaction tests for desktop GUI shell (Phase 3.6A)
+- `docs/architecture.md` — modified — documented GUI shell and state model (Phase 3.6A)
+- `docs/memory.md` — modified — updated with Phase 3.6A status and test results (Phase 3.6A)
 
 ## 15. Do Not Change Casually (requires explicit user approval)
 

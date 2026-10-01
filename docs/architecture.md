@@ -258,11 +258,17 @@ if ACCEPT (and confirmed/auto-add):
 
 ## 11. GUI and Threading Model
 
-- Tkinter (stdlib; no dependency). Main thread owns all widgets.
-- Worker→GUI communication only through a `queue.Queue` polled with `root.after(50, poll)` (DEFAULT 50 ms). Never call Tk methods from other threads.
-- GUI→worker: controller sets thread-safe flags/events (start, stop). Stop must return quickly; joining the worker uses a timeout and never blocks the GUI.
-- Models load in a background thread at app launch; Start is disabled with "Loading…" until ready.
-- Layout and behavior: `design.md`.
+The desktop GUI layer (`voice_calculator.gui`) provides the Windows desktop user interface built with Tkinter (stdlib).
+
+### Desktop GUI Shell (Phase 3.6A):
+- **Hero Running Total:** Displayed in prominent 56pt bold high-contrast type with thousands separators (`12,450`).
+- **Physical Controls:** Start, Stop, Undo, and Clear buttons with explicit keyboard shortcuts (Enter for Add, Esc for Discard, Ctrl+Z for Undo).
+- **Explicit State Indicators (`UIState`):** `STOPPED`, `LISTENING`, `PROCESSING`, `AWAITING_CONFIRMATION`, `REPEAT_REQUIRED`, `ERROR` with distinct color coding and plain-language status banners.
+- **Confirmation Subsystem:** When an accepted candidate requires confirmation, the GUI presents an in-place confirmation prompt (`Add <N>` / `Discard`) and temporarily disables Undo. Discard or Stop cancels the pending candidate without modifying the total.
+- **Recent Entries List:** Scrollable list showing ordered addition history (`#N +value Total: X`) with newest entries at the top.
+- **Strict Separation:** GUI widgets never perform speech parsing, ASR inference, or arithmetic calculation; all state updates flow through `Calculator` and `SafetyDecisionEngine`.
+- **Main Thread Safety:** All UI updates occur on the Tkinter main thread without blocking.
+
 
 ## 12. Error Handling and Recovery
 

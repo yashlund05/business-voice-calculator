@@ -14,6 +14,7 @@ from voice_calculator.decision import (
     SafetyDecisionEngine,
     evaluate_candidate,
 )
+from voice_calculator.gui import UIState, VoiceCalculatorApp
 from voice_calculator.pipeline import AudioPipeline, PipelineResult, PipelineStatus
 
 __version__ = "0.1.0"
@@ -31,8 +32,11 @@ __all__ = [
     "PipelineResult",
     "PipelineStatus",
     "SafetyDecisionEngine",
+    "UIState",
+    "VoiceCalculatorApp",
     "evaluate_candidate",
     "__version__",
 ]
+
 
 
