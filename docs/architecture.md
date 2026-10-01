@@ -110,9 +110,27 @@ Rules of responsibility: `numparse`, `decision`, `calculator`, `state` are **pur
   * `SPEECH_HANGOVER`: Trailing silence window (`VAD_HANGOVER_MS = 700 ms`). If speech resumes before expiry, returns to `SPEECH_ACTIVE`. If hangover elapses and speech duration >= `MIN_UTTERANCE_MS = 250 ms`, emits `Utterance`. If < min duration, discards as noise burst.
 - **Utterance Representation:**
   `Utterance(pcm_data: bytes, duration_ms: float, sample_rate: int, channels: int, peak_amplitude: int, rms_energy: float, is_clipped: bool, is_damaged: bool, is_too_long: bool, start_timestamp_ns: int, end_timestamp_ns: int, frame_count: int)`
-- **Interaction with AudioSource & ASR:**
-  `MicrophoneCapture` → produces `AudioFrame` → `UtteranceSegmenter.process_frame()` → emits completed `Utterance` → `ASREngine.transcribe(utterance.pcm_data)`.
-- **Stop:** `Stop` ends capture immediately; `UtteranceSegmenter.reset()` discards any in-progress utterance (avoids surprise additions after Stop).
+- **Interaction with AudioSource & ASR (Orchestration Layer):**
+  `AudioPipeline` coordinates `AudioSource` → `UtteranceSegmenter` → `ASREngine` → `numparse.parse()`:
+  ```python
+  class AudioPipeline:
+      def __init__(self, source: AudioSource, segmenter: UtteranceSegmenter, engine: ASREngine): ...
+      def process_next_frame(self, timeout: float = 0.05) -> PipelineResult | None: ...
+      def process_utterance(self, utterance: Utterance) -> PipelineResult: ...
+      def flush(self) -> PipelineResult | None: ...
+      def reset(self) -> None: ...
+  ```
+- **Pipeline Result & Status Model:**
+  `PipelineResult(status: PipelineStatus, utterance: Utterance | None, asr_result: ASRResult | None, parse_result: ParseResult | None, total_latency_ms: float, error_message: str | None)`
+  Status categories:
+  * `PARSED`: Speech transcribed and successfully parsed to integer candidate.
+  * `PARSER_REJECTED`: Speech transcribed, but rejected by parser grammar (non-number, malformed, ambiguous, or out of range).
+  * `NO_SPEECH`: Segmented audio contained silence or no recognizable speech.
+  * `ASR_ERROR`: ASR engine raised an inference error.
+  * `SOURCE_ERROR`: Audio capture hardware/stream failure.
+  * `TOO_LONG`: Utterance exceeded max duration cap.
+  * `DAMAGED`: Audio queue drop occurred during utterance capture.
+- **Stop:** `Stop` ends capture immediately; `AudioPipeline.reset()` discards any in-progress utterance (avoids surprise additions after Stop).
 - **Back-pressure:** one utterance is processed at a time; while processing, new audio still queues (bounded) and the next utterance is handled afterward. While `AWAITING_CONFIRMATION`, listening is **suspended** (capture may stay open but audio is discarded) until the user acts.
 
 ## 6. State Machine
