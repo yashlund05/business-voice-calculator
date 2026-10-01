@@ -11,6 +11,12 @@ from voice_calculator.audio.capture import (
     MicrophoneCapture,
     StreamError,
 )
+from voice_calculator.audio.wavio import (
+    WavFormatError,
+    read_wav,
+    write_wav,
+    write_wav_bytes,
+)
 
 __all__ = [
     "AudioError",
@@ -22,4 +28,8 @@ __all__ = [
     "MicNotFound",
     "MicrophoneCapture",
     "StreamError",
+    "WavFormatError",
+    "read_wav",
+    "write_wav",
+    "write_wav_bytes",
 ]

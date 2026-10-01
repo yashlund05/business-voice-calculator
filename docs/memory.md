@@ -7,16 +7,16 @@
 
 ## 1. Project Status
 
-- **Overall status:** Phase 1C (Audio Input Foundation) completed. All 186 unit and property tests passing.
+- **Overall status:** Phase 2.1 (ASR Interface and WAV I/O) completed. All 203 automated unit tests passing.
 - **Last updated:** 2026-10-01 by Antigravity
 
 ## 2. Current Phase
 
-- Phase: **Phase 1 complete**; ready for **Phase 2 — ASR Interface and Prerecorded-Audio Baseline**.
+- Phase: **Phase 2 — ASR Interface and Prerecorded-Audio Baseline** (Subtask 2.1 completed; ready for Subtask 2.2).
 
 ## 3. Current Task
 
-- Phase 1C completed. Next: Phase 2, subtask 2.1 (`asr/base.py`, `audio/wavio.py`, `FakeEngine`).
+- Phase 2.1 completed. Next: Phase 2, subtask 2.2 (`asr/vosk_engine.py` baseline implementation).
 
 ## 4. Completed Work
 
@@ -25,13 +25,14 @@
 - [0.2 Config & logging] Implemented `config.py` constants and tunables, `logging_setup.py` with privacy-safe rotating file logging; added tests in `tests/test_config.py`, `tests/test_logging.py`, and `tests/test_smoke.py`.
 - [1A Grammar Specification & Clarification] Defined formal grammar specification for 0–2000, unambiguous "and" / "a" rules, 1000–1999 structure, structural vs range error classification, normalization rules, reason codes, parser interface contract, and exhaustive testing plan.
 - [1B Number Parser Implementation & Audit] Implemented `src/voice_calculator/numparse.py` with pure deterministic grammar parser, normalization, and reason code classification. Added `tests/test_numparse_cases.py` and `tests/test_numparse_exhaustive.py` (exhaustive 0–2000 canonical words, 0–2000 digit strings, boundary values, invariants, and fuzz testing).
-- [1C Audio Input Foundation] Built `src/voice_calculator/audio/capture.py` providing `AudioFrame`, `AudioSource` protocol, `MicrophoneCapture` (via `sounddevice`), `FakeAudioSource`, and typed errors (`MicNotFound`, `MicLost`, `MicBusy`, `StreamError`). Added `tests/test_audio_capture.py` (9 mock/unit tests) and `tools/check_mic.py` (diagnostic tool).
+- [1C Audio Input Foundation] Built `src/voice_calculator/audio/capture.py` providing `AudioFrame`, `AudioSource` protocol, `MicrophoneCapture` (via `sounddevice`), `FakeAudioSource`, and typed errors (`MicNotFound`, `MicLost`, `MicBusy`, `StreamError`). Added `tests/test_audio_capture.py` and `tools/check_mic.py`.
+- [2.1 ASR Interface & WAV I/O] Implemented `ASREngine` protocol, `ASRResult` dataclass, typed exceptions (`ASRError`, `ModelMissingError`, `ModelLoadError`), and deterministic `FakeEngine` in `src/voice_calculator/asr/base.py`. Built strict 16 kHz mono int16 WAV reader/writer `src/voice_calculator/audio/wavio.py` using stdlib `wave`. Added `tests/test_asr_base.py` and `tests/test_wavio.py`.
 
 ## 5. Current Architecture (as implemented)
 
 - Architecture foundation laid per `architecture.md`.
-- Modules that exist in code: `voice_calculator.config`, `voice_calculator.logging_setup`, `voice_calculator.numparse`, `voice_calculator.audio.capture`.
-- Chosen ASR engine: **none yet** (baseline plan: Vosk + constrained grammar, pending Phase 3 ADR).
+- Modules that exist in code: `voice_calculator.config`, `voice_calculator.logging_setup`, `voice_calculator.numparse`, `voice_calculator.audio.capture`, `voice_calculator.audio.wavio`, `voice_calculator.asr.base`.
+- Chosen ASR engine: **none yet** (baseline plan: Vosk + constrained grammar, pending Phase 3 ADR; `FakeEngine` available for testing).
 - VAD: **none yet** (plan: energy baseline).
 - Auto-accept policy: **off** (confirm-all) by default (`AUTO_ACCEPT_ENABLED = False`).
 
@@ -47,6 +48,7 @@
 | 6 | Number grammar accepts canonical 0–2000, "a hundred/thousand", teen-hundreds (1100–1999), and canonical digit strings; British/Indian English optional "and" constructions; structural scale errors are MALFORMED; valid numbers >2000 evaluate to OUT_OF_RANGE | 2026-10-01 | Phase 1A clarification |
 | 7 | Parser is pure and deterministic: normalization strips harmless trailing `. ? !`, rejects internal punctuation, evaluates explicit grammar without token accumulation | 2026-10-01 | Phase 1B implementation |
 | 8 | Audio capture uses sounddevice (16 kHz mono int16) with bounded queue and non-blocking callback; hardware-independent tests use FakeAudioSource and mocks | 2026-10-01 | Phase 1C implementation |
+| 9 | ASR engine abstraction uses ASREngine protocol and ASRResult dataclass; WAV I/O uses stdlib wave strictly validated to 16 kHz mono int16 PCM | 2026-10-01 | Phase 2.1 implementation |
 
 ## 7. Pending Decisions
 
@@ -68,8 +70,8 @@
 
 ## 9. Test Status
 
-- Automated tests: **186 passed** (`pytest -v`).
-- Last test command/result: `.\.venv\Scripts\pytest.exe -v` -> 186 passed in 0.76s (test_audio_capture: 9, test_config: 4, test_logging: 3, test_numparse_cases: 158, test_numparse_exhaustive: 10, test_smoke: 2).
+- Automated tests: **203 passed** (`pytest -v`).
+- Last test command/result: `.\.venv\Scripts\pytest.exe -v` -> 203 passed in 1.30s (test_asr_base: 7, test_audio_capture: 9, test_config: 4, test_logging: 3, test_numparse_cases: 158, test_numparse_exhaustive: 10, test_smoke: 2, test_wavio: 10).
 - Manual tests: `tools/check_mic.py` verified live device enumeration and 16 kHz stream capture on Windows.
 
 ## 10. Benchmark Status
@@ -79,9 +81,8 @@
 
 ## 11. Important Lessons
 
-- Normalization must check for hyphens adjacent to digits (`1-500`) to avoid converting non-canonical digit formats into valid tokens.
-- Multi-number utterances containing multiple scale clauses (e.g. `one hundred two hundred`) must be detected and rejected as `MULTIPLE_NUMBERS`.
-- Audio callback must never block; non-blocking bounded queue insertion prevents audio thread stalling during worker backpressure.
+- WAV format validation using stdlib `wave` ensures offline compatibility with zero extra audio file dependencies.
+- `FakeEngine` cleanly decouples test execution from external ML binaries, keeping all automated testing fast, deterministic, and hardware-independent.
 
 ## 12. Dependencies Added (with justification)
 
@@ -93,17 +94,17 @@
 
 ## 13. Next Task
 
-- **Phase 2, subtask 2.1 — Interface + WAV I/O** (`phases.md`): `ASREngine` protocol, `ASRResult`, `FakeEngine`, and `audio/wavio.py`.
+- **Phase 2, subtask 2.2 — Vosk baseline** (`phases.md`): `VoskEngine` with constrained number-word grammar, local model path from config, no auto-download, clear `ModelMissingError`, test with fake/skip marker when model absent.
 
 ## 14. Files Changed Recently
 
-- `src/voice_calculator/audio/capture.py` — new — audio frame and microphone capture layer (Phase 1C)
-- `src/voice_calculator/audio/__init__.py` — new — audio package export (Phase 1C)
-- `tests/test_audio_capture.py` — new — unit tests for audio capture & fake audio source (Phase 1C)
-- `tools/check_mic.py` — new — manual audio device diagnostic tool (Phase 1C)
-- `requirements.txt` — modified — pinned sounddevice and numpy dependencies (Phase 1C)
-- `src/voice_calculator/config.py` — modified — added derived audio block and queue sizing constants
-- `docs/memory.md` — modified — updated with Phase 1C completion and test results
+- `src/voice_calculator/asr/base.py` — new — ASREngine protocol, ASRResult dataclass, FakeEngine (Phase 2.1)
+- `src/voice_calculator/asr/__init__.py` — new — ASR package exports (Phase 2.1)
+- `src/voice_calculator/audio/wavio.py` — new — WAV read/write helper for 16 kHz mono 16-bit PCM (Phase 2.1)
+- `tests/test_asr_base.py` — new — unit tests for ASR abstraction & FakeEngine (Phase 2.1)
+- `tests/test_wavio.py` — new — unit tests for WAV read/write & format rejection (Phase 2.1)
+- `src/voice_calculator/audio/__init__.py` — modified — exported wavio helpers (Phase 2.1)
+- `docs/memory.md` — modified — updated with Phase 2.1 completion and test results
 
 ## 15. Do Not Change Casually (requires explicit user approval)
 
