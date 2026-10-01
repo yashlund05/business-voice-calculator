@@ -27,8 +27,12 @@ from voice_calculator.decision import (
 )
 from voice_calculator.gui.app import VoiceCalculatorApp
 from voice_calculator.gui.messages import UIState
+from voice_calculator.asr.base import FakeEngine
+from voice_calculator.audio.capture import FakeAudioSource
+from voice_calculator.controller import ControllerEvent, ControllerEventType, ListeningController
 from voice_calculator.numparse import parse
 from voice_calculator.pipeline import PipelineResult, PipelineStatus
+
 
 
 @pytest.fixture(scope="module")
@@ -45,16 +49,28 @@ def tk_root():
 
 @pytest.fixture
 def gui_app(tk_root):
-    """Fixture providing a freshly initialized VoiceCalculatorApp for each test."""
+    """Fixture providing a freshly initialized VoiceCalculatorApp with a fake controller for tests."""
     calc = Calculator()
     decision_engine = SafetyDecisionEngine()
-    app = VoiceCalculatorApp(root=tk_root, calculator=calc, decision_engine=decision_engine)
+    fake_controller = ListeningController(
+        engine=FakeEngine(default_text="one hundred"),
+        audio_source_factory=lambda: FakeAudioSource([]),
+        decision_engine=decision_engine,
+    )
+    app = VoiceCalculatorApp(
+        root=tk_root,
+        calculator=calc,
+        decision_engine=decision_engine,
+        controller=fake_controller,
+    )
+
     app.on_clear()
     app.on_stop()
     app.refresh_display()
     yield app
     app.on_clear()
     app.on_stop()
+
 
 
 
@@ -320,4 +336,67 @@ class TestVoiceCalculatorGUI:
         # Calling on_undo while awaiting confirmation is a no-op
         gui_app.on_undo()
         assert gui_app.calculator.total == 100
+
+    def test_controller_event_dispatch_started_and_processing(self, gui_app: VoiceCalculatorApp):
+        """GUI handles STARTED and PROCESSING events correctly."""
+        session_id = gui_app.controller.current_session_id
+
+        # STARTED event
+        ev_start = ControllerEvent(event_type=ControllerEventType.STARTED, session_id=session_id)
+        gui_app._handle_controller_event(ev_start)
+        assert gui_app.state == UIState.LISTENING
+
+        # PROCESSING event
+        ev_proc = ControllerEvent(event_type=ControllerEventType.PROCESSING, session_id=session_id)
+        gui_app._handle_controller_event(ev_proc)
+        assert gui_app.state == UIState.PROCESSING
+
+    def test_controller_event_dispatch_decision(self, gui_app: VoiceCalculatorApp):
+        """GUI handles DECISION events and transitions to AWAITING_CONFIRMATION."""
+        session_id = gui_app.controller.current_session_id
+        dec = DecisionResult(
+            decision=DecisionType.ACCEPT,
+            value=88,
+            reason=DecisionReason.ACCEPTED_CANDIDATE,
+            requires_confirmation=True,
+        )
+        ev_dec = ControllerEvent(event_type=ControllerEventType.DECISION, session_id=session_id, decision=dec)
+        gui_app._handle_controller_event(ev_dec)
+
+        assert gui_app.state == UIState.AWAITING_CONFIRMATION
+        assert gui_app.pending_candidate == dec
+
+        gui_app.on_confirm_add()
+        assert gui_app.calculator.total == 88
+
+    def test_controller_event_dispatch_error(self, gui_app: VoiceCalculatorApp):
+        """GUI handles ERROR events and renders error message."""
+        session_id = gui_app.controller.current_session_id
+        ev_err = ControllerEvent(
+            event_type=ControllerEventType.ERROR,
+            session_id=session_id,
+            error_message="Microphone was disconnected.",
+            error_type="MicLost",
+        )
+        gui_app._handle_controller_event(ev_err)
+
+        assert gui_app.state == UIState.ERROR
+        assert "Microphone was disconnected" in gui_app.lbl_status.cget("text")
+
+    def test_stale_controller_event_is_ignored(self, gui_app: VoiceCalculatorApp):
+        """Events from outdated session IDs are ignored."""
+        stale_session = gui_app.controller.current_session_id - 1
+        dec = DecisionResult(
+            decision=DecisionType.ACCEPT,
+            value=999,
+            reason=DecisionReason.ACCEPTED_CANDIDATE,
+            requires_confirmation=True,
+        )
+        stale_event = ControllerEvent(event_type=ControllerEventType.DECISION, session_id=stale_session, decision=dec)
+        gui_app._handle_controller_event(stale_event)
+
+        # Candidate was NOT set
+        assert gui_app.pending_candidate is None
+        assert gui_app.calculator.total == 0
+
 

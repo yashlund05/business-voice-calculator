@@ -1,9 +1,10 @@
-"""Desktop GUI Shell for Voice Calculator.
+"""Desktop GUI for Voice Calculator with background ListeningController integration.
 
 Implements the Tkinter desktop user interface per docs/design.md:
 - Prominent running total hero display.
-- Physical Start and Stop controls.
+- Physical Start and Stop controls integrated with background ListeningController.
 - Explicit visual status indicators (Stopped, Listening, Processing, Awaiting Confirmation, Repeat, Error).
+- Non-blocking polling event loop via Tkinter after() delivering background worker events.
 - History view showing ordered accepted additions and resulting totals.
 - Undo and Clear/Reset operations.
 - Candidate confirmation area (Add / Discard).
@@ -11,11 +12,13 @@ Implements the Tkinter desktop user interface per docs/design.md:
 """
 
 import logging
+import queue
 import tkinter as tk
 from tkinter import ttk
 from typing import Optional
 
 from voice_calculator.calculator import Calculator, HistoryEntry
+from voice_calculator.controller import ControllerEvent, ControllerEventType, ListeningController
 from voice_calculator.decision import (
     DecisionReason,
     DecisionResult,
@@ -42,25 +45,30 @@ class VoiceCalculatorApp:
         root: Optional[tk.Tk] = None,
         calculator: Optional[Calculator] = None,
         decision_engine: Optional[SafetyDecisionEngine] = None,
+        controller: Optional[ListeningController] = None,
     ) -> None:
         self.root = root or tk.Tk()
         self.calculator = calculator or Calculator()
         self.decision_engine = decision_engine or SafetyDecisionEngine()
+        self.controller = controller or ListeningController(decision_engine=self.decision_engine)
 
         self.state: UIState = UIState.STOPPED
         self.pending_candidate: Optional[DecisionResult] = None
+        self._poll_job: Optional[str] = None
+        self._is_closing: bool = False
 
         self._init_window()
         self._create_widgets()
         self._bind_shortcuts()
         self.refresh_display()
+        self._start_event_polling()
 
     def _init_window(self) -> None:
         self.root.title("Voice Calculator")
         self.root.minsize(700, 520)
         self.root.geometry("850x620")
         self.root.configure(bg="#f4f6f8")
-
+        self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
     def _create_widgets(self) -> None:
         # Main layout container
@@ -117,7 +125,7 @@ class VoiceCalculatorApp:
 
         # Confirmation action buttons frame (hidden by default)
         self.confirm_buttons_frame = tk.Frame(self.feedback_card, bg="#ffffff")
-        
+
         self.btn_confirm_add = tk.Button(
             self.confirm_buttons_frame,
             text="Add (Enter)",
@@ -249,6 +257,62 @@ class VoiceCalculatorApp:
         self.root.bind("<Control-z>", lambda e: self.on_undo())
         self.root.bind("<Control-Z>", lambda e: self.on_undo())
 
+    def _start_event_polling(self) -> None:
+        """Starts periodic event queue polling on the Tkinter main thread."""
+        self._poll_controller_events()
+
+    def _poll_controller_events(self) -> None:
+        """Drains background worker events and dispatches GUI updates on main thread."""
+        if self._is_closing:
+            return
+
+        try:
+            while True:
+                event = self.controller.event_queue.get_nowait()
+                self._handle_controller_event(event)
+        except queue.Empty:
+            pass
+        except Exception as e:
+            logger.error("Error processing controller event: %s", e)
+
+        # Reschedule next poll
+        if not self._is_closing:
+            try:
+                self._poll_job = self.root.after(50, self._poll_controller_events)
+            except Exception:
+                pass
+
+    def _handle_controller_event(self, event: ControllerEvent) -> None:
+        """Handles a single event delivered from ListeningController."""
+        # Filter out stale events from previous sessions
+        if event.session_id != self.controller.current_session_id and event.event_type != ControllerEventType.STOPPED:
+            logger.debug("Discarding stale event from session %d (current=%d)", event.session_id, self.controller.current_session_id)
+            return
+
+        logger.debug("GUI received event: %s (session=%d)", event.event_type, event.session_id)
+
+        if event.event_type == ControllerEventType.STARTED:
+            self.set_state(UIState.LISTENING)
+            self.lbl_feedback.configure(text="Listening — speak a number between 0 and 2,000.")
+            self.confirm_buttons_frame.pack_forget()
+
+        elif event.event_type == ControllerEventType.PROCESSING:
+            self.set_state(UIState.PROCESSING)
+            self.lbl_feedback.configure(text="Working it out…")
+
+        elif event.event_type == ControllerEventType.DECISION:
+            if event.decision is not None:
+                self.process_decision_result(event.decision)
+
+        elif event.event_type == ControllerEventType.STOPPED:
+            self.set_state(UIState.STOPPED)
+            self.lbl_feedback.configure(text="Stopped — press Start to listen.")
+
+        elif event.event_type == ControllerEventType.ERROR:
+            err_msg = event.error_message or "An unexpected error occurred."
+            self.set_state(UIState.ERROR, custom_text=err_msg)
+            self.lbl_feedback.configure(text=err_msg)
+
     def set_state(self, new_state: UIState, custom_text: Optional[str] = None) -> None:
         """Updates the high-level GUI state and refreshes indicators."""
         self.state = new_state
@@ -259,7 +323,7 @@ class VoiceCalculatorApp:
         self.lbl_status.configure(text=text, bg=color)
 
         # Control button states
-        if self.state == UIState.STOPPED:
+        if self.state == UIState.STOPPED or self.state == UIState.ERROR:
             self.btn_start.configure(state=tk.NORMAL)
             self.btn_stop.configure(state=tk.DISABLED)
         else:
@@ -274,19 +338,25 @@ class VoiceCalculatorApp:
 
     def on_start(self) -> None:
         """Handles physical Start button click."""
-        logger.info("GUI Start clicked: switching to LISTENING state.")
-        self.set_state(UIState.LISTENING)
-        self.lbl_feedback.configure(text="Listening — speak a number between 0 and 2,000.")
+        logger.info("GUI Start clicked: starting listening controller.")
+        self.set_state(UIState.LISTENING, custom_text="Starting microphone…")
+        self.lbl_feedback.configure(text="Starting microphone…")
         self.confirm_buttons_frame.pack_forget()
+
+        started = self.controller.start()
+        if not started and not self.controller.is_listening:
+            self.set_state(UIState.ERROR, custom_text="Could not start listening.")
+            self.lbl_feedback.configure(text="Could not initialize microphone or speech engine.")
 
     def on_stop(self) -> None:
         """Handles physical Stop button click."""
-        logger.info("GUI Stop clicked: switching to STOPPED state.")
+        logger.info("GUI Stop clicked: stopping listening controller.")
         if self.pending_candidate is not None:
             logger.info("Discarding pending candidate on Stop.")
             self.pending_candidate = None
             self.confirm_buttons_frame.pack_forget()
 
+        self.controller.stop()
         self.set_state(UIState.STOPPED)
         self.lbl_feedback.configure(text="Stopped — press Start to listen.")
 
@@ -314,7 +384,10 @@ class VoiceCalculatorApp:
         self.lbl_feedback.configure(text="Total cleared.")
         self.refresh_display()
         if self.state == UIState.AWAITING_CONFIRMATION:
-            self.set_state(UIState.LISTENING)
+            if self.controller.is_listening:
+                self.set_state(UIState.LISTENING)
+            else:
+                self.set_state(UIState.STOPPED)
 
     def on_confirm_add(self) -> None:
         """Confirms adding the currently pending candidate."""
@@ -331,7 +404,10 @@ class VoiceCalculatorApp:
             logger.info("Confirmed addition of %d (new total=%d)", cand.value, self.calculator.total)
 
         self.refresh_display()
-        self.set_state(UIState.LISTENING)
+        if self.controller.is_listening:
+            self.set_state(UIState.LISTENING)
+        else:
+            self.set_state(UIState.STOPPED)
 
     def on_confirm_discard(self) -> None:
         """Discards the currently pending candidate."""
@@ -346,7 +422,10 @@ class VoiceCalculatorApp:
         logger.info("Discarded candidate %s", cand.value)
 
         self.refresh_display()
-        self.set_state(UIState.LISTENING)
+        if self.controller.is_listening:
+            self.set_state(UIState.LISTENING)
+        else:
+            self.set_state(UIState.STOPPED)
 
     def process_pipeline_result(self, pipeline_result: PipelineResult) -> DecisionResult:
         """Evaluates a raw PipelineResult through safety engine and updates GUI."""
@@ -371,7 +450,10 @@ class VoiceCalculatorApp:
                     self.calculator.add(decision_result.value)
                     self.lbl_feedback.configure(text=f"Added: +{format_number(decision_result.value)}")
                 self.refresh_display()
-                self.set_state(UIState.LISTENING)
+                if self.controller.is_listening:
+                    self.set_state(UIState.LISTENING)
+                else:
+                    self.set_state(UIState.STOPPED)
 
         # 2. REPEAT required
         elif decision_result.decision == DecisionType.REPEAT:
@@ -402,3 +484,19 @@ class VoiceCalculatorApp:
         for entry in reversed(entries):
             line = f"#{entry.sequence:<4} +{format_number(entry.value):<8}  Total: {format_number(entry.running_total)}"
             self.history_listbox.insert(tk.END, line)
+
+    def on_close(self) -> None:
+        """Handles window close event with clean background worker shutdown."""
+        logger.info("Application closing: shutting down ListeningController.")
+        self._is_closing = True
+        if self._poll_job is not None:
+            try:
+                self.root.after_cancel(self._poll_job)
+            except Exception:
+                pass
+
+        self.controller.stop(timeout=1.0)
+        try:
+            self.root.destroy()
+        except Exception:
+            pass

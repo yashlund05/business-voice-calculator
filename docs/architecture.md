@@ -269,6 +269,28 @@ The desktop GUI layer (`voice_calculator.gui`) provides the Windows desktop user
 - **Strict Separation:** GUI widgets never perform speech parsing, ASR inference, or arithmetic calculation; all state updates flow through `Calculator` and `SafetyDecisionEngine`.
 - **Main Thread Safety:** All UI updates occur on the Tkinter main thread without blocking.
 
+### Background Listening Controller & Threading Model (Phase 3.6B):
+```text
+[Tkinter GUI Main Thread] (VoiceCalculatorApp)
+      │  ▲
+      │  │  queue.Queue[ControllerEvent] (polled every 50ms via root.after)
+      ▼  │
+[ListeningController]
+      │
+      ▼
+[Background Worker Thread] (VoiceCalcWorker-<session_id>)
+      ├── AudioSource (sounddevice callback / queue)
+      ├── UtteranceSegmenter (EnergyVAD + state machine)
+      ├── ASREngine (Vosk / Fake)
+      ├── numparse.parse() (deterministic number parser)
+      └── SafetyDecisionEngine (ACCEPT / REPEAT / REJECT)
+```
+- **Worker Lifecycle:** Started cleanly via `controller.start()` and stopped via `controller.stop()`. Multi-worker prevention ensures duplicate start requests are rejected without spawning extra threads.
+- **Structured Controller Events (`ControllerEvent`):** Delivers immutable events across the thread boundary: `STARTED`, `PROCESSING`, `DECISION`, `STOPPED`, `ERROR`.
+- **Session Isolation:** `session_id` increments monotonically on each start; the GUI event polling loop strictly filters out stale events belonging to previous sessions.
+- **Exception Safety:** Microphone hardware errors (`AudioError`), missing model directories (`ModelMissingError`), and inference exceptions are captured safely in the worker and emitted as `ERROR` events without crashing the application.
+- **Clean Discard on Stop:** If the user presses Stop while an utterance is being processed or awaiting confirmation, in-flight results are cleanly discarded and the candidate prompt is dismissed.
+
 
 ## 12. Error Handling and Recovery
 

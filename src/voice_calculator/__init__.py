@@ -14,6 +14,11 @@ from voice_calculator.decision import (
     SafetyDecisionEngine,
     evaluate_candidate,
 )
+from voice_calculator.controller import (
+    ControllerEvent,
+    ControllerEventType,
+    ListeningController,
+)
 from voice_calculator.gui import UIState, VoiceCalculatorApp
 from voice_calculator.pipeline import AudioPipeline, PipelineResult, PipelineStatus
 
@@ -23,12 +28,15 @@ __all__ = [
     "AudioPipeline",
     "Calculator",
     "CalculatorError",
+    "ControllerEvent",
+    "ControllerEventType",
     "DecisionConfig",
     "DecisionReason",
     "DecisionResult",
     "DecisionType",
     "HistoryEntry",
     "InvalidValueError",
+    "ListeningController",
     "PipelineResult",
     "PipelineStatus",
     "SafetyDecisionEngine",
@@ -37,6 +45,7 @@ __all__ = [
     "evaluate_candidate",
     "__version__",
 ]
+
 
 
 
