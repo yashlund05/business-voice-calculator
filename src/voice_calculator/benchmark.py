@@ -85,6 +85,12 @@ class BenchmarkMetrics:
     correct_reject_count: int = 0
     false_reject_count: int = 0
 
+    asr_success_count: int = 0
+    asr_no_speech_count: int = 0
+    asr_error_count: int = 0
+    parser_success_count: int = 0
+    parser_reject_count: int = 0
+
     exact_integer_accuracy: float = 0.0
     false_addition_rate: float = 0.0
     false_acceptance_rate: float = 0.0
@@ -295,6 +301,12 @@ def compute_metrics(results: Sequence[SampleResult]) -> BenchmarkMetrics:
     correct_reject_count = 0
     false_reject_count = 0
 
+    asr_success_count = 0
+    asr_no_speech_count = 0
+    asr_error_count = 0
+    parser_success_count = 0
+    parser_reject_count = 0
+
     latencies: List[float] = []
 
     # Category, Speaker, Split groups
@@ -314,6 +326,18 @@ def compute_metrics(results: Sequence[SampleResult]) -> BenchmarkMetrics:
         if res.outcome == SampleOutcome.ERROR:
             error_samples += 1
             continue
+
+        if res.asr_status == ASRStatus.SUCCESS.value:
+            asr_success_count += 1
+        elif res.asr_status == ASRStatus.NO_SPEECH.value:
+            asr_no_speech_count += 1
+        elif res.asr_status == ASRStatus.ERROR.value:
+            asr_error_count += 1
+
+        if res.parse_status == ParseStatus.SUCCESS.value:
+            parser_success_count += 1
+        elif res.parse_status == ParseStatus.REJECTED.value:
+            parser_reject_count += 1
 
         if res.sample.is_negative:
             negative_samples += 1
@@ -389,6 +413,12 @@ def compute_metrics(results: Sequence[SampleResult]) -> BenchmarkMetrics:
         c_rej = sum(1 for r in group_results if r.outcome == SampleOutcome.CORRECT_REJECT)
         f_rej = sum(1 for r in group_results if r.outcome == SampleOutcome.FALSE_REJECT)
 
+        a_succ = sum(1 for r in group_results if r.asr_status == ASRStatus.SUCCESS.value and r.outcome != SampleOutcome.ERROR)
+        a_nsp = sum(1 for r in group_results if r.asr_status == ASRStatus.NO_SPEECH.value and r.outcome != SampleOutcome.ERROR)
+        a_err = sum(1 for r in group_results if r.asr_status == ASRStatus.ERROR.value and r.outcome != SampleOutcome.ERROR)
+        p_succ = sum(1 for r in group_results if r.parse_status == ParseStatus.SUCCESS.value and r.outcome != SampleOutcome.ERROR)
+        p_rej = sum(1 for r in group_results if r.parse_status == ParseStatus.REJECTED.value and r.outcome != SampleOutcome.ERROR)
+
         eval_cnt = v_count + n_count
         eia = (c_acc / v_count) if v_count > 0 else 0.0
         far = (f_add / eval_cnt) if eval_cnt > 0 else 0.0
@@ -416,6 +446,11 @@ def compute_metrics(results: Sequence[SampleResult]) -> BenchmarkMetrics:
             false_addition_neg_count=f_add_n,
             correct_reject_count=c_rej,
             false_reject_count=f_rej,
+            asr_success_count=a_succ,
+            asr_no_speech_count=a_nsp,
+            asr_error_count=a_err,
+            parser_success_count=p_succ,
+            parser_reject_count=p_rej,
             exact_integer_accuracy=eia,
             false_addition_rate=far,
             false_acceptance_rate=fa_neg,
@@ -444,6 +479,11 @@ def compute_metrics(results: Sequence[SampleResult]) -> BenchmarkMetrics:
         false_addition_neg_count=false_addition_neg_count,
         correct_reject_count=correct_reject_count,
         false_reject_count=false_reject_count,
+        asr_success_count=asr_success_count,
+        asr_no_speech_count=asr_no_speech_count,
+        asr_error_count=asr_error_count,
+        parser_success_count=parser_success_count,
+        parser_reject_count=parser_reject_count,
         exact_integer_accuracy=exact_integer_accuracy,
         false_addition_rate=false_addition_rate,
         false_acceptance_rate=false_acceptance_rate,
@@ -599,13 +639,21 @@ def format_benchmark_report(
         f"  Total Rejection Rate:               {rej_pct:6.2f}% ({total_rej}/{evaluated})"
     )
 
-    lines.append("\n3. LATENCY DISTRIBUTION (Inference ms)")
+    lines.append("\n3. ASR vs PARSER PIPELINE STATISTICS")
+    lines.append(
+        f"  ASR Recognitions: {metrics.asr_success_count} success | {metrics.asr_no_speech_count} no-speech/silence | {metrics.asr_error_count} ASR errors"
+    )
+    lines.append(
+        f"  Parser Outcomes:  {metrics.parser_success_count} accepted ({metrics.correct_accept_count} exact match, {metrics.false_addition_count} false addition) | {metrics.parser_reject_count} rejected"
+    )
+
+    lines.append("\n4. LATENCY DISTRIBUTION (Inference ms)")
     lines.append(
         f"  p50: {metrics.latency_p50_ms:6.1f} ms | p95: {metrics.latency_p95_ms:6.1f} ms | mean: {metrics.latency_mean_ms:6.1f} ms | min: {metrics.latency_min_ms:6.1f} ms | max: {metrics.latency_max_ms:6.1f} ms"
     )
 
     if metrics.category_metrics:
-        lines.append("\n4. BREAKDOWN BY CATEGORY")
+        lines.append("\n5. BREAKDOWN BY CATEGORY")
         lines.append(
             f"  {'Category':<24} {'N':>5} {'EIA %':>8} {'FalseAdd':>10} {'Reject %':>10} {'p50 ms':>8}"
         )
@@ -618,7 +666,7 @@ def format_benchmark_report(
             )
 
     if metrics.speaker_metrics and len(metrics.speaker_metrics) > 1:
-        lines.append("\n5. BREAKDOWN BY SPEAKER")
+        lines.append("\n6. BREAKDOWN BY SPEAKER")
         lines.append(
             f"  {'Speaker':<20} {'N':>5} {'EIA %':>8} {'FalseAdd':>10} {'p50 ms':>8}"
         )

@@ -191,21 +191,21 @@ def test_compute_metrics_known_distribution() -> None:
     # 8 correct accepts
     for i in range(8):
         lbl = SampleLabel(file=f"v_ok_{i}.wav", expected_value=i, category="canonical", split="dev")
-        results.append(SampleResult(sample=lbl, outcome=SampleOutcome.CORRECT_ACCEPT, elapsed_ms=100.0))
+        results.append(SampleResult(sample=lbl, outcome=SampleOutcome.CORRECT_ACCEPT, asr_status="SUCCESS", parse_status="SUCCESS", elapsed_ms=100.0))
     # 1 false addition on valid
     lbl_fa_v = SampleLabel(file="v_fa.wav", expected_value=10, category="confusable", split="dev")
-    results.append(SampleResult(sample=lbl_fa_v, outcome=SampleOutcome.FALSE_ADDITION, elapsed_ms=150.0))
+    results.append(SampleResult(sample=lbl_fa_v, outcome=SampleOutcome.FALSE_ADDITION, asr_status="SUCCESS", parse_status="SUCCESS", elapsed_ms=150.0))
     # 1 false reject on valid
     lbl_fr_v = SampleLabel(file="v_fr.wav", expected_value=20, category="confusable", split="dev")
-    results.append(SampleResult(sample=lbl_fr_v, outcome=SampleOutcome.FALSE_REJECT, elapsed_ms=120.0))
+    results.append(SampleResult(sample=lbl_fr_v, outcome=SampleOutcome.FALSE_REJECT, asr_status="SUCCESS", parse_status="REJECTED", elapsed_ms=120.0))
 
     # 3 correct rejects on negative
     for i in range(3):
         lbl = SampleLabel(file=f"n_cr_{i}.wav", expected_value=None, category="negative_noise", split="dev")
-        results.append(SampleResult(sample=lbl, outcome=SampleOutcome.CORRECT_REJECT, elapsed_ms=80.0))
+        results.append(SampleResult(sample=lbl, outcome=SampleOutcome.CORRECT_REJECT, asr_status="NO_SPEECH", parse_status="REJECTED", elapsed_ms=80.0))
     # 1 false addition on negative
     lbl_fa_n = SampleLabel(file="n_fa.wav", expected_value=None, category="negative_noise", split="dev")
-    results.append(SampleResult(sample=lbl_fa_n, outcome=SampleOutcome.FALSE_ADDITION, elapsed_ms=110.0))
+    results.append(SampleResult(sample=lbl_fa_n, outcome=SampleOutcome.FALSE_ADDITION, asr_status="SUCCESS", parse_status="SUCCESS", elapsed_ms=110.0))
 
     metrics = compute_metrics(results)
 
@@ -220,6 +220,12 @@ def test_compute_metrics_known_distribution() -> None:
     assert metrics.false_addition_neg_count == 1
     assert metrics.correct_reject_count == 3
     assert metrics.false_reject_count == 1
+
+    assert metrics.asr_no_speech_count == 3
+    assert metrics.asr_success_count == 11
+    assert metrics.asr_error_count == 0
+    assert metrics.parser_success_count == 10
+    assert metrics.parser_reject_count == 4
 
     # Exact Integer Accuracy: 8 / 10 = 0.80
     assert pytest.approx(metrics.exact_integer_accuracy, rel=1e-5) == 0.80

@@ -33,11 +33,12 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run offline ASR benchmark on labeled WAV datasets."
     )
+    default_dataset_dir = DATA_DIR_PATH / "eval" if (DATA_DIR_PATH / "eval").exists() else DATA_DIR_PATH / "recordings"
     parser.add_argument(
         "--dataset-dir",
         type=Path,
-        default=DATA_DIR_PATH / "recordings",
-        help="Directory containing WAV files and default labels.csv (default: data/recordings)",
+        default=default_dataset_dir,
+        help="Directory containing WAV files and default labels.csv (default: data/eval or data/recordings)",
     )
     parser.add_argument(
         "--labels-csv",
