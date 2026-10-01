@@ -7,16 +7,16 @@
 
 ## 1. Project Status
 
-- **Overall status:** Phase 2.2 (Vosk Baseline ASR Engine) completed. 213 unit/mock tests passing, 1 integration test skipped pending local model download.
+- **Overall status:** Phase 2.3 (Vosk Baseline Evaluation and Benchmark Infrastructure) completed. 233 unit/mock tests passing, 1 integration test skipped pending local model download.
 - **Last updated:** 2026-10-01 by Antigravity
 
 ## 2. Current Phase
 
-- Phase: **Phase 2 — ASR Interface and Prerecorded-Audio Baseline** (Subtasks 2.1 and 2.2 completed; ready for Subtask 2.3).
+- Phase: **Phase 2 — ASR Interface and Prerecorded-Audio Baseline** (Subtasks 2.1, 2.2, 2.3 completed).
 
 ## 3. Current Task
 
-- Phase 2.2 completed. Next: Phase 2, subtask 2.3 (`tools/record_dataset.py` recording helper).
+- Phase 2.3 completed. Next: Phase 3 — ASR Benchmark and Architecture Decision (or dataset recording with user).
 
 ## 4. Completed Work
 
@@ -28,11 +28,12 @@
 - [1C Audio Input Foundation] Built `src/voice_calculator/audio/capture.py` providing `AudioFrame`, `AudioSource` protocol, `MicrophoneCapture` (via `sounddevice`), `FakeAudioSource`, and typed errors (`MicNotFound`, `MicLost`, `MicBusy`, `StreamError`). Added `tests/test_audio_capture.py` and `tools/check_mic.py`.
 - [2.1 ASR Interface & WAV I/O] Implemented `ASREngine` protocol, `ASRResult` dataclass, typed exceptions (`ASRError`, `ModelMissingError`, `ModelLoadError`), and deterministic `FakeEngine` in `src/voice_calculator/asr/base.py`. Built strict 16 kHz mono int16 WAV reader/writer `src/voice_calculator/audio/wavio.py` using stdlib `wave`. Added `tests/test_asr_base.py` and `tests/test_wavio.py`.
 - [2.2 Vosk Baseline Engine] Built `src/voice_calculator/asr/vosk_engine.py` integrating Vosk offline ASR with constrained number-word grammar, local model path configuration (`VOSK_MODEL_PATH`), explicit loading, typed error mapping, and uncalibrated confidence handling. Added `tests/test_vosk_engine.py` (10 unit tests + 1 model-skip integration test) and `tools/check_vosk.py`.
+- [2.3 Vosk Baseline Evaluation & Benchmark Infrastructure] Implemented evaluation dataset schema, `labels.csv` loader, outcome classification (`CORRECT_ACCEPT`, `FALSE_ADDITION`, `CORRECT_REJECT`, `FALSE_REJECT`, `ERROR`), and metrics calculation engine in `src/voice_calculator/benchmark.py`. Built `tools/benchmark.py` (offline benchmark runner with category/speaker/split breakdowns and CSV export), `tools/record_dataset.py` (prompt-guided audio dataset recording helper), and `tools/transcribe.py` (WAV transcription CLI). Added `tests/test_benchmark.py` (20 unit/integration tests).
 
 ## 5. Current Architecture (as implemented)
 
 - Architecture foundation laid per `architecture.md`.
-- Modules that exist in code: `voice_calculator.config`, `voice_calculator.logging_setup`, `voice_calculator.numparse`, `voice_calculator.audio.capture`, `voice_calculator.audio.wavio`, `voice_calculator.asr.base`, `voice_calculator.asr.vosk_engine`.
+- Modules that exist in code: `voice_calculator.config`, `voice_calculator.logging_setup`, `voice_calculator.numparse`, `voice_calculator.audio.capture`, `voice_calculator.audio.wavio`, `voice_calculator.asr.base`, `voice_calculator.asr.vosk_engine`, `voice_calculator.benchmark`.
 - Chosen ASR engine: **Vosk small English + constrained grammar baseline** (pending Phase 3 benchmark evaluation and ADR).
 - VAD: **none yet** (plan: energy baseline).
 - Auto-accept policy: **off** (confirm-all) by default (`AUTO_ACCEPT_ENABLED = False`).
@@ -51,6 +52,7 @@
 | 8 | Audio capture uses sounddevice (16 kHz mono int16) with bounded queue and non-blocking callback; hardware-independent tests use FakeAudioSource and mocks | 2026-10-01 | Phase 1C implementation |
 | 9 | ASR engine abstraction uses ASREngine protocol and ASRResult dataclass; WAV I/O uses stdlib wave strictly validated to 16 kHz mono int16 PCM | 2026-10-01 | Phase 2.1 implementation |
 | 10 | Vosk ASR baseline uses local model directory (never auto-downloaded) with constrained grammar (`DEFAULT_NUMBER_GRAMMAR`), setting uncalibrated confidence to None | 2026-10-01 | Phase 2.2 implementation |
+| 11 | Benchmark harness classifies outcomes deterministically into CORRECT_ACCEPT, FALSE_ADDITION, CORRECT_REJECT, FALSE_REJECT; False Addition is the primary safety metric computed across all utterances | 2026-10-01 | Phase 2.3 implementation |
 
 ## 7. Pending Decisions
 
@@ -72,19 +74,23 @@
 
 ## 9. Test Status
 
-- Automated tests: **213 passed, 1 skipped** (`pytest -v`).
-- Last test command/result: `.\.venv\Scripts\pytest.exe -v` -> 213 passed, 1 skipped in 2.38s (test_asr_base: 7, test_audio_capture: 9, test_config: 4, test_logging: 3, test_numparse_cases: 158, test_numparse_exhaustive: 10, test_smoke: 2, test_vosk_engine: 10 passed + 1 skipped, test_wavio: 10).
-- Manual tests: `tools/check_vosk.py` verified path checking and clear missing model instructions; `tools/check_mic.py` verified live 16 kHz capture.
+- Automated tests: **233 passed, 1 skipped** (`pytest -v`).
+- Last test command/result: `.\.venv\Scripts\pytest.exe -v` -> 233 passed, 1 skipped in 1.24s (test_asr_base: 7, test_audio_capture: 9, test_benchmark: 20, test_config: 4, test_logging: 3, test_numparse_cases: 158, test_numparse_exhaustive: 10, test_smoke: 2, test_vosk_engine: 10 passed + 1 skipped, test_wavio: 10).
+- Manual/CLI verification:
+  - `tools/benchmark.py` verified with synthetic dataset, CLI flags, missing labels detection, and `--engine fake`.
+  - `tools/record_dataset.py` verified with `--dry-run --count 3`.
+  - `tools/transcribe.py` verified with `--help`.
 
 ## 10. Benchmark Status
 
-- **No benchmarks run. No accuracy, latency, or resource numbers exist.** Baseline ASR benchmark is pending labeled dataset collection (Phase 2.3 / Phase 3).
-- See `research.md` for templates.
+- **No live speech recordings run yet.** Benchmark harness and reporting pipeline are fully implemented and verified with synthetic tests. Actual accuracy, latency, and resource metrics are pending recorded dataset collection.
+- See `research.md` for metrics and templates.
 
 ## 11. Important Lessons
 
 - Vosk model weights must never be downloaded automatically at runtime; checking local model existence and raising typed `ModelMissingError` ensures reliable offline behavior.
 - Constraining Vosk grammar to the project's number-word closed vocabulary limits hallucination of general conversational words while leaving semantic parsing to `numparse.py`.
+- Benchmark evaluation harness must treat False Addition (wrong number on valid audio or any number on negative audio) as the primary safety metric, and report the Rule-of-Three 95% upper bound when zero errors are observed.
 
 ## 12. Dependencies Added (with justification)
 
@@ -97,17 +103,16 @@
 
 ## 13. Next Task
 
-- **Phase 2, subtask 2.3 — Dataset recording helper** (`phases.md`): `tools/record_dataset.py` for guided user audio prompt recording to git-ignored `data/recordings/` with `labels.csv`.
+- **Phase 3 — ASR Benchmark and Architecture Decision** (`phases.md` §Phase 3): Record/provide local evaluation dataset using `tools/record_dataset.py`, add Whisper candidate engine (`faster-whisper`), and run comparative benchmark evaluation.
 
 ## 14. Files Changed Recently
 
-- `src/voice_calculator/asr/vosk_engine.py` — new — VoskEngine with constrained grammar (Phase 2.2)
-- `tests/test_vosk_engine.py` — new — unit and integration tests for VoskEngine (Phase 2.2)
-- `tools/check_vosk.py` — new — manual Vosk model diagnostic tool (Phase 2.2)
-- `requirements.txt` — modified — pinned vosk==0.3.45 (Phase 2.2)
-- `src/voice_calculator/config.py` — modified — added VOSK_MODEL_PATH configuration (Phase 2.2)
-- `src/voice_calculator/asr/__init__.py` — modified — exported VoskEngine and grammar helper (Phase 2.2)
-- `docs/memory.md` — modified — updated with Phase 2.2 completion and test status
+- `src/voice_calculator/benchmark.py` — new — Benchmark evaluation pipeline, metrics calculation, and report formatting (Phase 2.3)
+- `tools/benchmark.py` — new — ASR benchmark CLI runner (Phase 2.3)
+- `tools/record_dataset.py` — new — Guided dataset recording helper CLI tool (Phase 2.3)
+- `tools/transcribe.py` — new — WAV file transcription and parsing CLI tool (Phase 2.3)
+- `tests/test_benchmark.py` — new — Unit and integration tests for benchmark pipeline (Phase 2.3)
+- `docs/memory.md` — modified — Updated with Phase 2.3 status and test results
 
 ## 15. Do Not Change Casually (requires explicit user approval)
 
