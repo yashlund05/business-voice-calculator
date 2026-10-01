@@ -7,22 +7,23 @@
 
 ## 1. Project Status
 
-- **Overall status:** Phase 0 (Foundation) completed. Application logic not yet implemented.
+- **Overall status:** Phase 1A (Parser Contract & Grammar Specification) completed. Implementation pending in Phase 1B.
 - **Last updated:** 2026-10-01 by Antigravity
 
 ## 2. Current Phase
 
-- Phase: **Phase 0 complete**; ready for **Phase 1 — Strict Deterministic Number Parser**.
+- Phase: **Phase 1 — Deterministic English Number Parser** (Phase 1A completed; ready for Phase 1B / subtask 1.1).
 
 ## 3. Current Task
 
-- Phase 0 completed. Ready for Phase 1, subtask 1.1 (Test corpus first).
+- Phase 1A completed. Next: Phase 1B (Subtask 1.1 — Test corpus first & 1.2 — Implementation).
 
 ## 4. Completed Work
 
 - Documentation pack created (`docs/prd.md`, `architecture.md`, `rules.md`, `phases.md`, `design.md`, `memory.md`, `research.md`).
 - [0.1 Skeleton] Established virtual environment (Python 3.11.9), `.gitignore`, `pyproject.toml`, `requirements.txt`, `README.md`, package structure `src/voice_calculator/__init__.py`.
 - [0.2 Config & logging] Implemented `config.py` constants and tunables, `logging_setup.py` with privacy-safe rotating file logging; added tests in `tests/test_config.py`, `tests/test_logging.py`, and `tests/test_smoke.py`.
+- [1A Grammar Specification] Defined formal grammar specification for 0–2000, normalization rules, reason codes, parser interface contract, and exhaustive testing plan.
 
 ## 5. Current Architecture (as implemented)
 
@@ -41,6 +42,7 @@
 | 3 | Uncertain recognition is never silently added; default policy is confirm-all until calibrated | 2026-10-01 | `architecture.md` §9 |
 | 4 | Tkinter GUI; worker thread + queue model | 2026-10-01 | `architecture.md` §11 |
 | 5 | Python 3.11.9 runtime and pytest 8.3.4 testing framework | 2026-10-01 | Phase 0 verification |
+| 6 | Number grammar accepts canonical 0–2000, "a hundred/thousand", teen-hundreds (1100–1999), and canonical digit strings; strictly rejects non-canonical or ambiguous forms | 2026-10-01 | Phase 1A specification |
 
 ## 7. Pending Decisions
 
@@ -51,7 +53,7 @@
 | P3 | VAD choice and timings | energy VAD | Phase 4 |
 | P4 | Auto-accept rules/thresholds | none (confirm-all) | Phase 5 |
 | P5 | Ratify PROVISIONAL targets in `prd.md` §13 | as written | Phase 3 gate |
-| P6 | Accept "fifteen hundred and fifty"-style forms | accept | Phase 1 |
+| P6 | Accept "fifteen hundred and fifty"-style forms | **Resolved: Accepted** | Phase 1A |
 | P7 | Multiple numbers per utterance | reject | Post-MVP |
 | P8 | Zero requires confirm | yes | after benchmark |
 | P9 | PyInstaller one-folder vs one-file | one-folder | Phase 8 |
@@ -63,8 +65,8 @@
 ## 9. Test Status
 
 - Automated tests: **9 passed** (`pytest -v`).
-- Last test command/result: `.\.venv\Scripts\pytest.exe -v` -> 9 passed in 0.09s (test_config: 4, test_logging: 3, test_smoke: 2).
-- Manual tests: None required for Phase 0.
+- Last test command/result: `.\.venv\Scripts\pytest.exe -v` -> 9 passed in 0.19s.
+- Manual tests: None required for Phase 0 / 1A.
 
 ## 10. Benchmark Status
 
@@ -83,11 +85,11 @@
 
 ## 13. Next Task
 
-- **Phase 1, subtask 1.1 — Test corpus first** (`phases.md`).
+- **Phase 1, subtask 1.1 / Phase 1B — Test corpus first & parser implementation** (`phases.md`).
 
 ## 14. Files Changed Recently
 
-- `docs/memory.md` — modified — updated Phase 0 completion state
+- `docs/memory.md` — modified — recorded Phase 1A completion and confirmed grammar decisions
 - `README.md` — modified — updated setup and testing instructions
 - `src/voice_calculator/config.py` — new — configuration constants & tunables
 - `src/voice_calculator/logging_setup.py` — new — privacy-safe logger setup
