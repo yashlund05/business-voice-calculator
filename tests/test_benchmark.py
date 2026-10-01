@@ -375,3 +375,42 @@ def test_format_benchmark_report() -> None:
     assert "False Addition Rate" in report
     assert "LATENCY DISTRIBUTION" in report
     assert "BREAKDOWN BY CATEGORY" in report
+
+
+# --- 6. Recording Tool Prompt Consistency Tests ---
+
+
+def test_recording_prompts_consistency() -> None:
+    """Verifies that all DEFAULT_PROMPTS in record_dataset match the parser's documented grammar."""
+    import sys
+    from voice_calculator.config import PROJECT_ROOT
+    sys.path.insert(0, str(PROJECT_ROOT / "tools"))
+    from record_dataset import DEFAULT_PROMPTS
+    from voice_calculator.numparse import parse, ParseStatus
+
+    for item in DEFAULT_PROMPTS:
+        if item.expected_value is not None:
+            # Positive prompt: must parse to exact expected integer
+            res = parse(item.prompt_text)
+            assert res.status == ParseStatus.SUCCESS, f"Prompt '{item.prompt_text}' failed to parse: {res.reason}"
+            assert res.value == item.expected_value, f"Prompt '{item.prompt_text}' expected {item.expected_value}, got {res.value}"
+        else:
+            # Negative prompt: if not a bracketed action, must be rejected
+            if not item.prompt_text.startswith("["):
+                res = parse(item.prompt_text)
+                assert res.status == ParseStatus.REJECTED, f"Negative prompt '{item.prompt_text}' unexpectedly succeeded with {res.value}"
+
+
+def test_ensure_labels_csv(tmp_path: Path) -> None:
+    import sys
+    from voice_calculator.config import PROJECT_ROOT
+    sys.path.insert(0, str(PROJECT_ROOT / "tools"))
+    from record_dataset import ensure_labels_csv
+
+    target_csv = tmp_path / "subdir" / "labels.csv"
+    ensure_labels_csv(target_csv)
+    assert target_csv.is_file()
+
+    header = target_csv.read_text(encoding="utf-8").strip()
+    assert header == "file,expected_value_or_NEGATIVE,category,speaker,session_id,split,notes"
+

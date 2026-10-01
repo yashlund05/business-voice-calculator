@@ -8,7 +8,8 @@ Follows docs/research.md §3 protocol.
 
 Usage:
     python tools/record_dataset.py [--speaker NAME] [--split dev|calibration|test]
-                                   [--session ID] [--output-dir DIR] [--dry-run]
+                                   [--session ID] [--output-dir DIR] [--category CAT]
+                                   [--device DEV] [--duration SEC] [--dry-run]
 """
 
 import argparse
@@ -43,90 +44,121 @@ class PromptItem:
 
 
 DEFAULT_PROMPTS: List[PromptItem] = [
-    # Units and teens
-    PromptItem("zero", 0, "units_teens"),
-    PromptItem("one", 1, "units_teens"),
-    PromptItem("two", 2, "units_teens"),
-    PromptItem("three", 3, "units_teens"),
-    PromptItem("four", 4, "units_teens"),
-    PromptItem("five", 5, "units_teens"),
-    PromptItem("six", 6, "units_teens"),
-    PromptItem("seven", 7, "units_teens"),
-    PromptItem("eight", 8, "units_teens"),
-    PromptItem("nine", 9, "units_teens"),
-    PromptItem("ten", 10, "units_teens"),
-    PromptItem("eleven", 11, "units_teens"),
-    PromptItem("twelve", 12, "units_teens"),
-    PromptItem("thirteen", 13, "units_teens"),
-    PromptItem("fourteen", 14, "units_teens"),
-    PromptItem("fifteen", 15, "units_teens"),
-    PromptItem("sixteen", 16, "units_teens"),
-    PromptItem("seventeen", 17, "units_teens"),
-    PromptItem("eighteen", 18, "units_teens"),
-    PromptItem("nineteen", 19, "units_teens"),
-    # Tens
-    PromptItem("twenty", 20, "tens"),
-    PromptItem("thirty", 30, "tens"),
-    PromptItem("forty", 40, "tens"),
-    PromptItem("fifty", 50, "tens"),
-    PromptItem("sixty", 60, "tens"),
-    PromptItem("seventy", 70, "tens"),
-    PromptItem("eighty", 80, "tens"),
-    PromptItem("ninety", 90, "tens"),
-    # Confusable pairs (frequent business confusions)
-    PromptItem("thirteen", 13, "confusable"),
-    PromptItem("thirty", 30, "confusable"),
-    PromptItem("fourteen", 14, "confusable"),
-    PromptItem("forty", 40, "confusable"),
-    PromptItem("fifteen", 15, "confusable"),
-    PromptItem("fifty", 50, "confusable"),
-    PromptItem("sixteen", 16, "confusable"),
-    PromptItem("sixty", 60, "confusable"),
-    PromptItem("seventeen", 17, "confusable"),
-    PromptItem("seventy", 70, "confusable"),
-    PromptItem("eighteen", 18, "confusable"),
-    PromptItem("eighty", 80, "confusable"),
-    PromptItem("nineteen", 19, "confusable"),
-    PromptItem("ninety", 90, "confusable"),
-    # Compound numbers 21-99
-    PromptItem("twenty five", 25, "compound_tens"),
-    PromptItem("forty two", 42, "compound_tens"),
-    PromptItem("fifty seven", 57, "compound_tens"),
-    PromptItem("ninety nine", 99, "compound_tens"),
-    # Hundreds and linguistic variants
-    PromptItem("one hundred", 100, "hundreds"),
-    PromptItem("a hundred", 100, "hundreds_variant"),
-    PromptItem("one hundred five", 105, "hundreds"),
-    PromptItem("one hundred and five", 105, "hundreds_and"),
-    PromptItem("two hundred fifty", 250, "hundreds"),
-    PromptItem("two hundred and fifty", 250, "hundreds_and"),
-    PromptItem("seven hundred eighty nine", 789, "hundreds"),
-    # Thousands and teen-hundreds
-    PromptItem("one thousand", 1000, "thousands"),
-    PromptItem("a thousand", 1000, "thousands_variant"),
-    PromptItem("one thousand five", 1005, "thousands"),
-    PromptItem("one thousand and five", 1005, "thousands_and"),
-    PromptItem("one thousand two hundred", 1200, "thousands"),
-    PromptItem("one thousand two hundred fifty", 1250, "thousands"),
-    PromptItem("one thousand two hundred and fifty", 1250, "thousands_and"),
-    PromptItem("fifteen hundred", 1500, "teen_hundreds"),
-    PromptItem("fifteen hundred and fifty", 1550, "teen_hundreds_and"),
-    PromptItem("two thousand", 2000, "boundary"),
-    # Negatives: out of range
-    PromptItem("two thousand and one", None, "negative_out_of_range", "out of range"),
-    PromptItem("two thousand five hundred", None, "negative_out_of_range", "out of range"),
-    PromptItem("five thousand", None, "negative_out_of_range", "out of range"),
-    # Negatives: non-numbers / command words (verifies no voice commands)
+    # 1. Units and teens (0-19)
+    PromptItem("zero", 0, "units_teens", "canonical unit"),
+    PromptItem("one", 1, "units_teens", "canonical unit"),
+    PromptItem("two", 2, "units_teens", "canonical unit"),
+    PromptItem("three", 3, "units_teens", "canonical unit"),
+    PromptItem("four", 4, "units_teens", "canonical unit"),
+    PromptItem("five", 5, "units_teens", "canonical unit"),
+    PromptItem("six", 6, "units_teens", "canonical unit"),
+    PromptItem("seven", 7, "units_teens", "canonical unit"),
+    PromptItem("eight", 8, "units_teens", "canonical unit"),
+    PromptItem("nine", 9, "units_teens", "canonical unit"),
+    PromptItem("ten", 10, "units_teens", "canonical teen"),
+    PromptItem("eleven", 11, "units_teens", "canonical teen"),
+    PromptItem("twelve", 12, "units_teens", "canonical teen"),
+    PromptItem("thirteen", 13, "units_teens", "canonical teen"),
+    PromptItem("fourteen", 14, "units_teens", "canonical teen"),
+    PromptItem("fifteen", 15, "units_teens", "canonical teen"),
+    PromptItem("sixteen", 16, "units_teens", "canonical teen"),
+    PromptItem("seventeen", 17, "units_teens", "canonical teen"),
+    PromptItem("eighteen", 18, "units_teens", "canonical teen"),
+    PromptItem("nineteen", 19, "units_teens", "canonical teen"),
+
+    # 2. Tens (20-90)
+    PromptItem("twenty", 20, "tens", "canonical ten"),
+    PromptItem("thirty", 30, "tens", "canonical ten"),
+    PromptItem("forty", 40, "tens", "canonical ten"),
+    PromptItem("fifty", 50, "tens", "canonical ten"),
+    PromptItem("sixty", 60, "tens", "canonical ten"),
+    PromptItem("seventy", 70, "tens", "canonical ten"),
+    PromptItem("eighty", 80, "tens", "canonical ten"),
+    PromptItem("ninety", 90, "tens", "canonical ten"),
+
+    # 3. Confusable pairs (frequent business confusions)
+    PromptItem("thirteen", 13, "confusable", "confusable with 30"),
+    PromptItem("thirty", 30, "confusable", "confusable with 13"),
+    PromptItem("fourteen", 14, "confusable", "confusable with 40"),
+    PromptItem("forty", 40, "confusable", "confusable with 14"),
+    PromptItem("fifteen", 15, "confusable", "confusable with 50"),
+    PromptItem("fifty", 50, "confusable", "confusable with 15"),
+    PromptItem("sixteen", 16, "confusable", "confusable with 60"),
+    PromptItem("sixty", 60, "confusable", "confusable with 16"),
+    PromptItem("seventeen", 17, "confusable", "confusable with 70"),
+    PromptItem("seventy", 70, "confusable", "confusable with 17"),
+    PromptItem("eighteen", 18, "confusable", "confusable with 80"),
+    PromptItem("eighty", 80, "confusable", "confusable with 18"),
+    PromptItem("nineteen", 19, "confusable", "confusable with 90"),
+    PromptItem("ninety", 90, "confusable", "confusable with 19"),
+
+    # 4. Compound numbers 21-99
+    PromptItem("twenty one", 21, "compound_tens", "compound 21"),
+    PromptItem("thirty five", 35, "compound_tens", "compound 35"),
+    PromptItem("forty two", 42, "compound_tens", "compound 42"),
+    PromptItem("forty seven", 47, "compound_tens", "compound 47"),
+    PromptItem("fifty seven", 57, "compound_tens", "compound 57"),
+    PromptItem("ninety nine", 99, "compound_tens", "compound 99"),
+
+    # 5. Hundreds and linguistic variants
+    PromptItem("one hundred", 100, "hundreds", "canonical 100"),
+    PromptItem("a hundred", 100, "hundreds_variant", "variant with 'a'"),
+    PromptItem("one hundred five", 105, "hundreds", "canonical 105"),
+    PromptItem("one hundred and five", 105, "hundreds_and", "105 with 'and'"),
+    PromptItem("two hundred forty", 240, "hundreds", "canonical 240"),
+    PromptItem("two hundred and forty", 240, "hundreds_and", "240 with 'and'"),
+    PromptItem("two hundred fifty", 250, "hundreds", "canonical 250"),
+    PromptItem("two hundred and fifty", 250, "hundreds_and", "250 with 'and'"),
+    PromptItem("five hundred ninety nine", 599, "hundreds", "canonical 599"),
+    PromptItem("five hundred and ninety nine", 599, "hundreds_and", "599 with 'and'"),
+    PromptItem("seven hundred eighty nine", 789, "hundreds", "canonical 789"),
+    PromptItem("nine hundred ninety nine", 999, "hundreds", "canonical 999"),
+    PromptItem("nine hundred and ninety nine", 999, "hundreds_and", "999 with 'and'"),
+
+    # 6. Thousands, teen-hundreds, and boundary values
+    PromptItem("one thousand", 1000, "thousands", "canonical 1000"),
+    PromptItem("a thousand", 1000, "thousands_variant", "variant with 'a'"),
+    PromptItem("one thousand five", 1005, "thousands", "canonical 1005"),
+    PromptItem("one thousand and five", 1005, "thousands_and", "1005 with 'and'"),
+    PromptItem("one thousand two hundred", 1200, "thousands", "canonical 1200"),
+    PromptItem("one thousand two hundred five", 1205, "thousands", "canonical 1205"),
+    PromptItem("one thousand two hundred and five", 1205, "thousands_and", "1205 with 'and'"),
+    PromptItem("one thousand two hundred fifty", 1250, "thousands", "canonical 1250"),
+    PromptItem("one thousand two hundred and fifty", 1250, "thousands_and", "1250 with 'and'"),
+    PromptItem("fifteen hundred", 1500, "teen_hundreds", "teen-hundred 1500"),
+    PromptItem("fifteen hundred and fifty", 1550, "teen_hundreds_and", "1550 with 'and'"),
+    PromptItem("nineteen hundred", 1900, "teen_hundreds", "teen-hundred 1900"),
+    PromptItem("nineteen hundred five", 1905, "teen_hundreds", "1905 without 'and'"),
+    PromptItem("nineteen hundred and five", 1905, "teen_hundreds_and", "1905 with 'and'"),
+    PromptItem("two thousand", 2000, "boundary", "upper boundary 2000"),
+
+    # 7. Negatives: out of range (> 2000)
+    PromptItem("two thousand and one", None, "negative_out_of_range", "out of range 2001"),
+    PromptItem("two thousand five hundred", None, "negative_out_of_range", "out of range 2500"),
+    PromptItem("five thousand", None, "negative_out_of_range", "out of range 5000"),
+
+    # 7. Negatives: command-like words (verifies no voice commands)
     PromptItem("undo", None, "negative_non_number", "command word - must be rejected"),
     PromptItem("stop", None, "negative_non_number", "command word - must be rejected"),
     PromptItem("clear", None, "negative_non_number", "command word - must be rejected"),
     PromptItem("reset", None, "negative_non_number", "command word - must be rejected"),
+
+    # 7. Negatives: conversational / irrelevant speech
     PromptItem("hello", None, "negative_non_number", "conversational"),
     PromptItem("yes", None, "negative_non_number", "conversational"),
-    # Negatives: non-speech / noise
+    PromptItem("okay", None, "negative_non_number", "conversational"),
+    PromptItem("thank you", None, "negative_non_number", "conversational"),
+
+    # 7. Negatives: malformed number phrases
+    PromptItem("hundred fifty", None, "negative_malformed", "missing unit multiplier"),
+    PromptItem("twenty twenty", None, "negative_malformed", "adjacent tens without scale"),
+    PromptItem("one twenty", None, "negative_malformed", "collated units/tens"),
+    PromptItem("forty and five", None, "negative_malformed", "invalid 'and' between tens and units"),
+
+    # 7. Negatives: non-speech / noise / silence
     PromptItem("[Stay silent for 2 seconds]", None, "negative_non_speech", "background silence"),
     PromptItem("[Cough or clear throat]", None, "negative_non_speech", "throat clear noise"),
-    PromptItem("[Type on keyboard]", None, "negative_non_speech", "typing noise"),
+    PromptItem("[Type on keyboard]", None, "negative_non_speech", "keyboard typing noise"),
 ]
 
 
@@ -184,6 +216,18 @@ def parse_args() -> argparse.Namespace:
         help="Recording duration in seconds per prompt (default: 2.5s)",
     )
     parser.add_argument(
+        "--category",
+        type=str,
+        default=None,
+        help="Filter prompts to a specific category (e.g. 'units_teens', 'tens', 'confusable', 'hundreds', 'thousands', 'negative_non_number', 'negative_non_speech')",
+    )
+    parser.add_argument(
+        "--device",
+        type=int,
+        default=None,
+        help="Optional input audio device index",
+    )
+    parser.add_argument(
         "--count",
         type=int,
         default=None,
@@ -194,13 +238,39 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Simulate session without accessing microphone or saving files",
     )
+    parser.add_argument(
+        "--list-categories",
+        action="store_true",
+        help="List available prompt categories and counts, then exit",
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
+
+    if args.list_categories:
+        counts = {}
+        for p in DEFAULT_PROMPTS:
+            counts[p.category] = counts.get(p.category, 0) + 1
+        print("\nAvailable prompt categories:")
+        for cat, count in sorted(counts.items()):
+            print(f"  - {cat:<24} ({count} prompts)")
+        print(f"Total default prompts: {len(DEFAULT_PROMPTS)}")
+        return 0
+
     out_dir: Path = args.output_dir
     labels_csv = out_dir / "labels.csv"
+
+    prompts = DEFAULT_PROMPTS
+    if args.category:
+        prompts = [p for p in prompts if p.category.lower() == args.category.lower()]
+        if not prompts:
+            print(f"[ERROR] No prompts found for category '{args.category}'. Use --list-categories to view options.", file=sys.stderr)
+            return 1
+
+    if args.count is not None and args.count > 0:
+        prompts = prompts[: args.count]
 
     print("\n" + "=" * 78)
     print("VOICE CALCULATOR — DATASET RECORDING HELPER")
@@ -211,19 +281,19 @@ def main() -> int:
     print(f"Split:        {args.split}")
     print(f"Session:      {args.session}")
     print(f"Duration:     {args.duration:.1f}s per utterance")
+    if args.category:
+        print(f"Category:     {args.category}")
+    if args.device is not None:
+        print(f"Audio Device: {args.device}")
     if args.dry_run:
         print("[MODE: DRY-RUN — no audio will be recorded]")
     print("-" * 78)
 
-    prompts = DEFAULT_PROMPTS
-    if args.count is not None and args.count > 0:
-        prompts = prompts[: args.count]
-
     print(f"Prompts in this session: {len(prompts)}")
-    print("Instructions:")
-    print("  - Speak clearly in a quiet environment at normal speaking distance.")
-    print("  - Press [ENTER] when ready to record each prompt.")
-    print("  - Type 'q' and press [ENTER] to exit early.")
+    print("Controls:")
+    print("  - [ENTER]  : Record prompt")
+    print("  - 's'      : Skip current prompt")
+    print("  - 'q'      : Quit recording session")
     print("=" * 78 + "\n")
 
     if not args.dry_run:
@@ -231,14 +301,16 @@ def main() -> int:
         ensure_labels_csv(labels_csv)
 
     recorded_count = 0
+    idx = 0
 
-    for idx, item in enumerate(prompts, start=1):
+    while idx < len(prompts):
+        item = prompts[idx]
         target_display = (
             f"Value: {item.expected_value} | Speak: \"{item.prompt_text}\""
             if item.expected_value is not None
             else f"NEGATIVE | Speak / Act: \"{item.prompt_text}\""
         )
-        print(f"[{idx}/{len(prompts)}] Category: {item.category}")
+        print(f"[{idx + 1}/{len(prompts)}] Category: {item.category}")
         print(f"   --> {target_display}")
         if item.notes:
             print(f"   Note: {item.notes}")
@@ -246,25 +318,30 @@ def main() -> int:
         if args.dry_run:
             print("   [Dry-run] Simulated prompt.")
             recorded_count += 1
+            idx += 1
             continue
 
-        user_input = input("   Press [ENTER] to record (or 'q' to quit): ").strip().lower()
+        user_input = input("   Press [ENTER] to record (or 's' to skip, 'q' to quit): ").strip().lower()
         if user_input == "q":
             print("\nRecording stopped by user.")
             break
+        elif user_input == "s":
+            print("   [Skipped]\n")
+            idx += 1
+            continue
 
         # Capture audio
-        filename = f"rec_{args.session}_{idx:04d}_{item.category}.wav"
+        filename = f"rec_{args.session}_{idx + 1:04d}_{item.category}.wav"
         filepath = out_dir / filename
 
-        print(f"   *** RECORDING ({args.duration:.1f}s)... Speak now! ***")
-        cap = MicrophoneCapture()
+        print(f"   *** RECORDING ({args.duration:.1f}s)... Speak clearly! ***")
+        cap = MicrophoneCapture(device_index=args.device)
         cap.start()
 
         frames_bytes = bytearray()
         start_t = time.monotonic()
         while time.monotonic() - start_t < args.duration:
-            frame = cap.read(timeout=0.2)
+            frame = cap.get_frame(timeout=0.2)
             if frame is not None:
                 frames_bytes.extend(frame.data)
 
@@ -296,7 +373,16 @@ def main() -> int:
             )
 
         recorded_count += 1
-        print(f"   Saved -> {filename}\n")
+        print(f"   Saved -> {filename}")
+
+        # Post-recording confirmation option
+        post_input = input("   Press [ENTER] for next, or 'r' to re-record this prompt: ").strip().lower()
+        if post_input == "r":
+            print("   Re-recording current prompt...\n")
+            continue
+
+        print()
+        idx += 1
 
     print("\n" + "=" * 78)
     print(f"Session finished. Recorded {recorded_count} prompt(s).")

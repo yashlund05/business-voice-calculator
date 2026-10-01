@@ -7,16 +7,16 @@
 
 ## 1. Project Status
 
-- **Overall status:** Phase 2.3 (Vosk Baseline Evaluation and Benchmark Infrastructure) completed. 233 unit/mock tests passing, 1 integration test skipped pending local model download.
+- **Overall status:** Phase 3.1 (Dataset Recording Workflow & Consistency Verification) completed. 235 unit/mock tests passing, 1 integration test skipped pending local model download.
 - **Last updated:** 2026-10-01 by Antigravity
 
 ## 2. Current Phase
 
-- Phase: **Phase 2 — ASR Interface and Prerecorded-Audio Baseline** (Subtasks 2.1, 2.2, 2.3 completed).
+- Phase: **Phase 3 — ASR Benchmark and Architecture Decision** (Subtask 3.1 dataset workflow validated and ready for recording).
 
 ## 3. Current Task
 
-- Phase 2.3 completed. Next: Phase 3 — ASR Benchmark and Architecture Decision (or dataset recording with user).
+- Phase 3.1 dataset recording workflow validated. Next: User records real speech dataset using `tools/record_dataset.py`.
 
 ## 4. Completed Work
 
@@ -29,6 +29,7 @@
 - [2.1 ASR Interface & WAV I/O] Implemented `ASREngine` protocol, `ASRResult` dataclass, typed exceptions (`ASRError`, `ModelMissingError`, `ModelLoadError`), and deterministic `FakeEngine` in `src/voice_calculator/asr/base.py`. Built strict 16 kHz mono int16 WAV reader/writer `src/voice_calculator/audio/wavio.py` using stdlib `wave`. Added `tests/test_asr_base.py` and `tests/test_wavio.py`.
 - [2.2 Vosk Baseline Engine] Built `src/voice_calculator/asr/vosk_engine.py` integrating Vosk offline ASR with constrained number-word grammar, local model path configuration (`VOSK_MODEL_PATH`), explicit loading, typed error mapping, and uncalibrated confidence handling. Added `tests/test_vosk_engine.py` (10 unit tests + 1 model-skip integration test) and `tools/check_vosk.py`.
 - [2.3 Vosk Baseline Evaluation & Benchmark Infrastructure] Implemented evaluation dataset schema, `labels.csv` loader, outcome classification (`CORRECT_ACCEPT`, `FALSE_ADDITION`, `CORRECT_REJECT`, `FALSE_REJECT`, `ERROR`), and metrics calculation engine in `src/voice_calculator/benchmark.py`. Built `tools/benchmark.py` (offline benchmark runner with category/speaker/split breakdowns and CSV export), `tools/record_dataset.py` (prompt-guided audio dataset recording helper), and `tools/transcribe.py` (WAV transcription CLI). Added `tests/test_benchmark.py` (20 unit/integration tests).
+- [3.1 Real Speech Dataset Workflow & Prompt Alignment] Validated and expanded `tools/record_dataset.py` across 94 prompts covering units/teens (0-19), tens (20-90), confusable pairs (13/30..19/90), compound tens, hundreds variants, thousands/teen-hundreds, out-of-range, command words, conversational speech, and non-speech noise. Added category filtering, device selection, interactive re-record/skip controls, and automated prompt-to-parser grammar consistency tests in `tests/test_benchmark.py` (22 benchmark tests passing).
 
 ## 5. Current Architecture (as implemented)
 
@@ -53,6 +54,7 @@
 | 9 | ASR engine abstraction uses ASREngine protocol and ASRResult dataclass; WAV I/O uses stdlib wave strictly validated to 16 kHz mono int16 PCM | 2026-10-01 | Phase 2.1 implementation |
 | 10 | Vosk ASR baseline uses local model directory (never auto-downloaded) with constrained grammar (`DEFAULT_NUMBER_GRAMMAR`), setting uncalibrated confidence to None | 2026-10-01 | Phase 2.2 implementation |
 | 11 | Benchmark harness classifies outcomes deterministically into CORRECT_ACCEPT, FALSE_ADDITION, CORRECT_REJECT, FALSE_REJECT; False Addition is the primary safety metric computed across all utterances | 2026-10-01 | Phase 2.3 implementation |
+| 12 | Dataset recording prompts must strictly conform to parser grammar and research.md §3 coverage without altering parser grammar | 2026-10-01 | Phase 3.1 verification |
 
 ## 7. Pending Decisions
 
@@ -74,16 +76,16 @@
 
 ## 9. Test Status
 
-- Automated tests: **233 passed, 1 skipped** (`pytest -v`).
-- Last test command/result: `.\.venv\Scripts\pytest.exe -v` -> 233 passed, 1 skipped in 1.24s (test_asr_base: 7, test_audio_capture: 9, test_benchmark: 20, test_config: 4, test_logging: 3, test_numparse_cases: 158, test_numparse_exhaustive: 10, test_smoke: 2, test_vosk_engine: 10 passed + 1 skipped, test_wavio: 10).
+- Automated tests: **235 passed, 1 skipped** (`pytest -v`).
+- Last test command/result: `.\.venv\Scripts\pytest.exe -v` -> 235 passed, 1 skipped in 1.38s (test_asr_base: 7, test_audio_capture: 9, test_benchmark: 22, test_config: 4, test_logging: 3, test_numparse_cases: 158, test_numparse_exhaustive: 10, test_smoke: 2, test_vosk_engine: 10 passed + 1 skipped, test_wavio: 10).
 - Manual/CLI verification:
-  - `tools/benchmark.py` verified with synthetic dataset, CLI flags, missing labels detection, and `--engine fake`.
-  - `tools/record_dataset.py` verified with `--dry-run --count 3`.
-  - `tools/transcribe.py` verified with `--help`.
+  - `tools/record_dataset.py --list-categories` verified (17 categories, 94 total prompts).
+  - `tools/record_dataset.py --dry-run --count 5` verified.
+  - `tools/benchmark.py` verified with synthetic dataset and CLI flags.
 
 ## 10. Benchmark Status
 
-- **No live speech recordings run yet.** Benchmark harness and reporting pipeline are fully implemented and verified with synthetic tests. Actual accuracy, latency, and resource metrics are pending recorded dataset collection.
+- **No live speech recordings run yet.** Benchmark harness, dataset recording helper, and reporting pipeline are fully implemented and verified with synthetic tests. Actual accuracy, latency, and resource metrics are pending real speech recording session.
 - See `research.md` for metrics and templates.
 
 ## 11. Important Lessons
@@ -91,6 +93,7 @@
 - Vosk model weights must never be downloaded automatically at runtime; checking local model existence and raising typed `ModelMissingError` ensures reliable offline behavior.
 - Constraining Vosk grammar to the project's number-word closed vocabulary limits hallucination of general conversational words while leaving semantic parsing to `numparse.py`.
 - Benchmark evaluation harness must treat False Addition (wrong number on valid audio or any number on negative audio) as the primary safety metric, and report the Rule-of-Three 95% upper bound when zero errors are observed.
+- Automated prompt consistency tests ensure recording prompts never drift from the formal parser grammar.
 
 ## 12. Dependencies Added (with justification)
 
@@ -103,16 +106,13 @@
 
 ## 13. Next Task
 
-- **Phase 3 — ASR Benchmark and Architecture Decision** (`phases.md` §Phase 3): Record/provide local evaluation dataset using `tools/record_dataset.py`, add Whisper candidate engine (`faster-whisper`), and run comparative benchmark evaluation.
+- **Phase 3 — Real Speech Dataset Recording**: Run `python tools/record_dataset.py` to record real speech utterances with the microphone to `data/recordings/` with `labels.csv`.
 
 ## 14. Files Changed Recently
 
-- `src/voice_calculator/benchmark.py` — new — Benchmark evaluation pipeline, metrics calculation, and report formatting (Phase 2.3)
-- `tools/benchmark.py` — new — ASR benchmark CLI runner (Phase 2.3)
-- `tools/record_dataset.py` — new — Guided dataset recording helper CLI tool (Phase 2.3)
-- `tools/transcribe.py` — new — WAV file transcription and parsing CLI tool (Phase 2.3)
-- `tests/test_benchmark.py` — new — Unit and integration tests for benchmark pipeline (Phase 2.3)
-- `docs/memory.md` — modified — Updated with Phase 2.3 status and test results
+- `tools/record_dataset.py` — modified — enhanced prompt coverage (94 prompts), category filtering, device index selection, re-record controls (Phase 3.1)
+- `tests/test_benchmark.py` — modified — added prompt consistency and label CSV helper tests (Phase 3.1)
+- `docs/memory.md` — modified — updated with Phase 3.1 status and test results
 
 ## 15. Do Not Change Casually (requires explicit user approval)
 
