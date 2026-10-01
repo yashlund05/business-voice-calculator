@@ -166,6 +166,12 @@ Decision rule: adopt a heavier VAD only if it measurably improves missed/clipped
 
 Purpose: test whether any signal separates correct from incorrect recognitions. **Use the `calibration` split only.** ASR confidence is a hypothesis, not a trusted measure.
 
+**Candidate Safety & Policy Boundary Note (Phase 3.4):**
+- In `SafetyDecisionEngine`, confidence thresholds (`min_confidence`) and confidence requirements (`require_confidence`) exist as policy boundaries.
+- **Current status:** Confidence scores are **uncalibrated** and not empirically validated. ASR confidence alone is NEVER treated as proof of correctness.
+- When ASR confidence is missing (such as the current Vosk baseline) or uncalibrated, the safety layer deterministically falls back to conservative confirm-by-default behavior (`requires_confirmation = True`).
+- No claims of "confidence > X implies accuracy" are made without measured benchmark calibration data.
+
 | Signal | Available from | Distribution on correct (N) | Distribution on wrong (N) | Separation (e.g. overlap, simple ROC description) | Usable? | Notes |
 |--------|----------------|-----------------------------|----------------------------|---------------------------------------------------|---------|-------|
 | ASR confidence | Vosk / Whisper (per engine) | PENDING | PENDING | PENDING | PENDING | |

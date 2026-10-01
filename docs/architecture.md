@@ -199,22 +199,39 @@ The interface is the only coupling between recognition and the rest of the app. 
 - **Invariants:** Pure function, no I/O, no network, no unhandled exceptions on arbitrary input.
 - **Tests:** Exhaustive generation of canonical word forms for 0–2000 (round trip), linguistic variants ("a" forms, optional "and", teen-hundreds), boundary values, comprehensive rejection corpus, and invariant/fuzz tests.
 
-## 9. Decision Engine (ACCEPT / CONFIRM / REJECT)
+## 9. Decision Engine & Candidate Safety Layer (ACCEPT / REPEAT / REJECT)
 
-Pure function: `decide(parse_result, utterance_stats, asr_signals, config) -> Decision`.
+The safety/decision layer (`voice_calculator.decision`) evaluates candidate `PipelineResult` instances output by the audio processing pipeline and determines the safe action.
 
-Hard rules (**FIXED**, independent of thresholds):
-1. Parse failed → **REJECT**.
-2. Utterance flagged damaged / too long / too short / clipped / empty → **REJECT**.
-3. Parsed value `0` → **CONFIRM** (DEFAULT).
-4. Any rule evaluating "uncertain" → **CONFIRM** (never ACCEPT).
-5. ASR confidence alone never triggers ACCEPT.
+### Core Principle: Candidate != Automatic Addition
+A successful parser result is **never** automatically equivalent to permission to add. The system prefers:
+> **"Repeat is better than a wrong total."**
 
-Soft signals (all thresholds **[BENCH]**, no invented values): utterance duration plausibility for the parsed word count, signal level (too quiet), engine-vs-engine agreement (only if a second pass exists), n-best disagreement, ASR confidence as a weak negative signal (low → downgrade to CONFIRM; high never upgrades by itself).
+```python
+class DecisionType(Enum):
+    ACCEPT = "ACCEPT"  # Safe candidate for downstream calculation / confirmation
+    REPEAT = "REPEAT"  # Audio/ASR/confidence uncertainty; user should repeat
+    REJECT = "REJECT"  # Definitely not a supported number or invalid structure
 
-**Safe default policy until calibrated (DEFAULT):** `auto_accept_enabled = false` → every successfully parsed value is **CONFIRM**. Phase 5 introduces auto-accept rules only if `research.md` calibration shows the False Addition Rate target (`prd.md` AC-4) is met on a held-out set. This guarantees the system is safe-by-default before evidence exists.
+class DecisionResult(frozen):
+    decision: DecisionType
+    value: Optional[int] = None
+    reason: DecisionReason
+    requires_confirmation: bool = True
+    explanation: str = ""
+    confidence: Optional[float] = None
+    recognized_text: str = ""
+    pipeline_status: Optional[PipelineStatus] = None
+```
 
-Decision output includes a `reason` string for the UI/log (e.g. `PARSE_FAILED:MALFORMED`, `ZERO_VALUE`, `LOW_SIGNAL`).
+### Invariants:
+1. **No Arithmetic Logic:** The safety layer performs zero calculation, running total tracking, or history manipulation.
+2. **Value Masking:** Non-accepted decisions (`REPEAT`, `REJECT`) **never** carry an integer value (`value is None`), preventing downstream components from accidentally reading or adding invalid data.
+3. **Safe Defaults (Confirm-All):** `auto_accept_enabled = False` by default. Every candidate integer requires manual confirmation until empirical calibration on real speech data proves 0 false additions.
+4. **Zero Confirmation:** Parsed integer `0` always requires confirmation (`requires_confirmation = True`), even if auto-accept is enabled.
+5. **Confidence Handling:** Confidence thresholds are configurable policy boundaries (`min_confidence`, `require_confidence`). Uncalibrated/missing confidence (e.g. Vosk baseline) safely falls back to mandatory user confirmation.
+6. **Error Mapping:** Hardware (`SOURCE_ERROR`), engine (`ASR_ERROR`), silence (`NO_SPEECH`), and buffer issues (`DAMAGED`, `TOO_LONG`) map to `REPEAT`. Linguistic/grammar rejections, command words, and out-of-range inputs map to `REJECT`.
+
 
 ## 10. Deterministic Calculation Core
 
