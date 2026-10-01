@@ -7,16 +7,16 @@
 
 ## 1. Project Status
 
-- **Overall status:** Phase 3.1 (Dataset Recording Workflow & Consistency Verification) completed. 235 unit/mock tests passing, 1 integration test skipped pending local model download.
+- **Overall status:** Phase 3.2 (VAD & Utterance Segmentation Foundation) completed. 256 unit/mock tests passing, 1 integration test skipped pending local model download.
 - **Last updated:** 2026-10-01 by Antigravity
 
 ## 2. Current Phase
 
-- Phase: **Phase 3 — ASR Benchmark and Architecture Decision** (Subtask 3.1 dataset workflow validated and ready for recording).
+- Phase: **Phase 3 — ASR Benchmark and Architecture Decision** (Subtasks 3.1 and 3.2 completed).
 
 ## 3. Current Task
 
-- Phase 3.1 dataset recording workflow validated. Next: User records real speech dataset using `tools/record_dataset.py`.
+- Phase 3.2 completed. Next: Phase 3.3 (Candidate Whisper engine / dataset recording with user).
 
 ## 4. Completed Work
 
@@ -30,13 +30,14 @@
 - [2.2 Vosk Baseline Engine] Built `src/voice_calculator/asr/vosk_engine.py` integrating Vosk offline ASR with constrained number-word grammar, local model path configuration (`VOSK_MODEL_PATH`), explicit loading, typed error mapping, and uncalibrated confidence handling. Added `tests/test_vosk_engine.py` (10 unit tests + 1 model-skip integration test) and `tools/check_vosk.py`.
 - [2.3 Vosk Baseline Evaluation & Benchmark Infrastructure] Implemented evaluation dataset schema, `labels.csv` loader, outcome classification (`CORRECT_ACCEPT`, `FALSE_ADDITION`, `CORRECT_REJECT`, `FALSE_REJECT`, `ERROR`), and metrics calculation engine in `src/voice_calculator/benchmark.py`. Built `tools/benchmark.py` (offline benchmark runner with category/speaker/split breakdowns and CSV export), `tools/record_dataset.py` (prompt-guided audio dataset recording helper), and `tools/transcribe.py` (WAV transcription CLI). Added `tests/test_benchmark.py` (20 unit/integration tests).
 - [3.1 Real Speech Dataset Workflow & Prompt Alignment] Validated and expanded `tools/record_dataset.py` across 94 prompts covering units/teens (0-19), tens (20-90), confusable pairs (13/30..19/90), compound tens, hundreds variants, thousands/teen-hundreds, out-of-range, command words, conversational speech, and non-speech noise. Added category filtering, device selection, interactive re-record/skip controls, and automated prompt-to-parser grammar consistency tests in `tests/test_benchmark.py` (22 benchmark tests passing).
+- [3.2 VAD & Utterance Segmentation Foundation] Implemented modular `VADDetector` protocol and zero-ML `EnergyVAD` baseline in `src/voice_calculator/audio/vad.py`. Implemented 3-state online finite state machine (`SILENCE`, `SPEECH_ACTIVE`, `SPEECH_HANGOVER`) in `src/voice_calculator/audio/segmenter.py` with pre-roll ring buffer preservation, trailing hangover window, min speech duration enforcement (discarding short clicks/noise), max utterance cap (`is_too_long`), and queue overflow tracking (`is_damaged`). Added `tests/test_vad.py` (8 tests) and `tests/test_segmenter.py` (12 tests). Updated `docs/architecture.md` and `docs/research.md`.
 
 ## 5. Current Architecture (as implemented)
 
 - Architecture foundation laid per `architecture.md`.
-- Modules that exist in code: `voice_calculator.config`, `voice_calculator.logging_setup`, `voice_calculator.numparse`, `voice_calculator.audio.capture`, `voice_calculator.audio.wavio`, `voice_calculator.asr.base`, `voice_calculator.asr.vosk_engine`, `voice_calculator.benchmark`.
+- Modules that exist in code: `voice_calculator.config`, `voice_calculator.logging_setup`, `voice_calculator.numparse`, `voice_calculator.audio.capture`, `voice_calculator.audio.wavio`, `voice_calculator.audio.vad`, `voice_calculator.audio.segmenter`, `voice_calculator.asr.base`, `voice_calculator.asr.vosk_engine`, `voice_calculator.benchmark`.
 - Chosen ASR engine: **Vosk small English + constrained grammar baseline** (pending Phase 3 benchmark evaluation and ADR).
-- VAD: **none yet** (plan: energy baseline).
+- VAD: **EnergyVAD baseline (500.0 RMS threshold, 250ms pre-roll, 700ms hangover, 250ms min utterance, 6000ms max utterance)** (pending calibration on real recordings).
 - Auto-accept policy: **off** (confirm-all) by default (`AUTO_ACCEPT_ENABLED = False`).
 
 ## 6. Confirmed Decisions
@@ -55,6 +56,7 @@
 | 10 | Vosk ASR baseline uses local model directory (never auto-downloaded) with constrained grammar (`DEFAULT_NUMBER_GRAMMAR`), setting uncalibrated confidence to None | 2026-10-01 | Phase 2.2 implementation |
 | 11 | Benchmark harness classifies outcomes deterministically into CORRECT_ACCEPT, FALSE_ADDITION, CORRECT_REJECT, FALSE_REJECT; False Addition is the primary safety metric computed across all utterances | 2026-10-01 | Phase 2.3 implementation |
 | 12 | Dataset recording prompts must strictly conform to parser grammar and research.md §3 coverage without altering parser grammar | 2026-10-01 | Phase 3.1 verification |
+| 13 | VAD layer is modular via VADDetector protocol; baseline is pure EnergyVAD; UtteranceSegmenter online state machine enforces pre-roll, hangover, min speech duration, max utterance cap, and overflow tracking | 2026-10-01 | Phase 3.2 implementation |
 
 ## 7. Pending Decisions
 
@@ -62,7 +64,7 @@
 |---|----------|-----------------|-----------|
 | P1 | Python version | **Resolved: 3.11.9** | Phase 0 |
 | P2 | ASR engine/model (Vosk, faster-whisper size, hybrid) | Vosk + grammar baseline | Phase 3 ADR |
-| P3 | VAD choice and timings | energy VAD | Phase 4 |
+| P3 | VAD choice and timings | EnergyVAD (threshold 500 RMS, 250ms pre-roll, 700ms hangover) | Phase 4 calibration |
 | P4 | Auto-accept rules/thresholds | none (confirm-all) | Phase 5 |
 | P5 | Ratify PROVISIONAL targets in `prd.md` §13 | as written | Phase 3 gate |
 | P6 | Accept "fifteen hundred and fifty"-style forms | **Resolved: Accepted** | Phase 1A |
@@ -76,16 +78,12 @@
 
 ## 9. Test Status
 
-- Automated tests: **235 passed, 1 skipped** (`pytest -v`).
-- Last test command/result: `.\.venv\Scripts\pytest.exe -v` -> 235 passed, 1 skipped in 1.38s (test_asr_base: 7, test_audio_capture: 9, test_benchmark: 22, test_config: 4, test_logging: 3, test_numparse_cases: 158, test_numparse_exhaustive: 10, test_smoke: 2, test_vosk_engine: 10 passed + 1 skipped, test_wavio: 10).
-- Manual/CLI verification:
-  - `tools/record_dataset.py --list-categories` verified (17 categories, 94 total prompts).
-  - `tools/record_dataset.py --dry-run --count 5` verified.
-  - `tools/benchmark.py` verified with synthetic dataset and CLI flags.
+- Automated tests: **256 passed, 1 skipped** (`pytest -v`).
+- Last test command/result: `.\.venv\Scripts\pytest.exe -v` -> 256 passed, 1 skipped in 1.13s (test_asr_base: 7, test_audio_capture: 9, test_benchmark: 22, test_config: 5, test_logging: 3, test_numparse_cases: 158, test_numparse_exhaustive: 10, test_segmenter: 12, test_smoke: 2, test_vad: 8, test_vosk_engine: 10 passed + 1 skipped, test_wavio: 10).
 
 ## 10. Benchmark Status
 
-- **No live speech recordings run yet.** Benchmark harness, dataset recording helper, and reporting pipeline are fully implemented and verified with synthetic tests. Actual accuracy, latency, and resource metrics are pending real speech recording session.
+- **No live speech recordings run yet.** Benchmark harness, dataset recording helper, and VAD segmentation are fully implemented and verified with synthetic tests. Actual accuracy, latency, and resource metrics are pending real speech recording session.
 - See `research.md` for metrics and templates.
 
 ## 11. Important Lessons
@@ -94,6 +92,7 @@
 - Constraining Vosk grammar to the project's number-word closed vocabulary limits hallucination of general conversational words while leaving semantic parsing to `numparse.py`.
 - Benchmark evaluation harness must treat False Addition (wrong number on valid audio or any number on negative audio) as the primary safety metric, and report the Rule-of-Three 95% upper bound when zero errors are observed.
 - Automated prompt consistency tests ensure recording prompts never drift from the formal parser grammar.
+- Online utterance segmentation must cleanly separate speech detection (VADDetector protocol) from temporal state transitions (UtteranceSegmenter), keeping audio capture and downstream ASR decoupled.
 
 ## 12. Dependencies Added (with justification)
 
@@ -101,18 +100,25 @@
 |---------|---------|---------|-------------------------------------|-------|
 | pytest | 8.3.4 | Test framework | Automated unit and property testing; standard test runner | Phase 0 |
 | sounddevice | 0.5.6 | Audio capture | Low-latency, reliable PortAudio Python bindings for Windows | Phase 1C |
-| numpy | 2.4.6 | Buffer operations | Efficient audio buffer representation for sounddevice | Phase 1C |
+| numpy | 2.4.6 | Buffer operations | Efficient audio buffer representation for sounddevice & VAD RMS | Phase 1C |
 | vosk | 0.3.45 | Offline ASR | Candidate ASR baseline engine for English speech recognition | Phase 2.2 |
 
 ## 13. Next Task
 
-- **Phase 3 — Real Speech Dataset Recording**: Run `python tools/record_dataset.py` to record real speech utterances with the microphone to `data/recordings/` with `labels.csv`.
+- **Phase 3.3 — Candidate Whisper Engine / Benchmark Evaluation**: Implement `WhisperEngine` (`faster-whisper`), evaluate Vosk vs Whisper on recorded dataset, and write ADR in `docs/research.md`.
 
 ## 14. Files Changed Recently
 
-- `tools/record_dataset.py` — modified — enhanced prompt coverage (94 prompts), category filtering, device index selection, re-record controls (Phase 3.1)
-- `tests/test_benchmark.py` — modified — added prompt consistency and label CSV helper tests (Phase 3.1)
-- `docs/memory.md` — modified — updated with Phase 3.1 status and test results
+- `src/voice_calculator/audio/vad.py` — new — VADDetector protocol, EnergyVAD, and audio signal analysis (Phase 3.2)
+- `src/voice_calculator/audio/segmenter.py` — new — Utterance dataclass and UtteranceSegmenter finite state machine (Phase 3.2)
+- `src/voice_calculator/audio/__init__.py` — modified — exported VAD and segmenter classes (Phase 3.2)
+- `src/voice_calculator/config.py` — modified — added VAD_ENERGY_THRESHOLD and AppConfig fields (Phase 3.2)
+- `tests/test_vad.py` — new — unit tests for EnergyVAD and audio measurements (Phase 3.2)
+- `tests/test_segmenter.py` — new — unit tests for UtteranceSegmenter state machine (Phase 3.2)
+- `tests/test_config.py` — modified — added VAD configuration tests (Phase 3.2)
+- `docs/architecture.md` — modified — documented VAD/Segmenter architecture and state machine (Phase 3.2)
+- `docs/research.md` — modified — documented EnergyVAD baseline and pending calibration status (Phase 3.2)
+- `docs/memory.md` — modified — updated with Phase 3.2 status and test results
 
 ## 15. Do Not Change Casually (requires explicit user approval)
 

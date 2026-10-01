@@ -26,6 +26,15 @@ def test_safety_defaults():
     assert config.ZERO_REQUIRES_CONFIRMATION is True
 
 
+def test_vad_defaults():
+    """Verify VAD defaults match architecture.md §5."""
+    assert config.VAD_ENERGY_THRESHOLD > 0
+    assert config.VAD_PRE_ROLL_MS > 0
+    assert config.VAD_HANGOVER_MS > 0
+    assert config.MIN_UTTERANCE_MS > 0
+    assert config.MAX_UTTERANCE_MS > config.MIN_UTTERANCE_MS
+
+
 def test_app_config_dataclass():
     """Verify AppConfig dataclass provides frozen instance with matching defaults."""
     cfg = config.AppConfig()
@@ -33,3 +42,9 @@ def test_app_config_dataclass():
     assert cfg.max_number == 2000
     assert cfg.auto_accept_enabled is False
     assert cfg.audio_sample_rate == 16000
+    assert cfg.vad_energy_threshold == config.VAD_ENERGY_THRESHOLD
+    assert cfg.vad_pre_roll_ms == config.VAD_PRE_ROLL_MS
+    assert cfg.vad_hangover_ms == config.VAD_HANGOVER_MS
+    assert cfg.min_utterance_ms == config.MIN_UTTERANCE_MS
+    assert cfg.max_utterance_ms == config.MAX_UTTERANCE_MS
+

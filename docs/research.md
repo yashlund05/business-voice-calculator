@@ -149,11 +149,16 @@ Same dataset/split and same policy for every row. All `PENDING`.
 
 ## 8. VAD Experiment Template
 
+**Baseline Implementation (Phase 3.2):**
+- VAD detector: `EnergyVAD` (pure RMS energy thresholding, zero extra ML dependencies).
+- Initial engineering defaults: Threshold = 500.0 RMS, Pre-roll = 250 ms, Hangover = 700 ms, Min/Max utterance = 250 ms / 6000 ms.
+- Status: **Pending calibration on real speech dataset.** All accuracy and trigger measurements below are `PENDING`. No accuracy or quiet-room optimality is claimed without benchmark evidence.
+
 Dataset: `dev` recordings + live trials. All `PENDING`.
 
 | Exp | VAD (energy / Silero) | Threshold | Pre-roll (ms) | Hangover (ms) | Min/Max utt (ms) | Missed utterances | Clipped starts/ends | False triggers (noise) | Split utterances (one number → two) | Added dependency size |
 |-----|-----------------------|-----------|---------------|---------------|------------------|-------------------|---------------------|------------------------|-------------------------------------|----------------------|
-| PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| PENDING | EnergyVAD | 500.0 RMS | 250 ms | 700 ms | 250 / 6000 ms | PENDING | PENDING | PENDING | PENDING | 0 MB (stdlib/numpy) |
 
 Decision rule: adopt a heavier VAD only if it measurably improves missed/clipped/false-trigger counts on the same recordings and the dependency cost is justified in `memory.md`.
 

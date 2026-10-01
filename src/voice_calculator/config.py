@@ -27,6 +27,8 @@ AUDIO_BLOCK_BYTES: int = AUDIO_BLOCK_SAMPLES * 2  # 960 bytes for 16-bit mono
 AUDIO_QUEUE_MAX_BLOCKS: int = int((AUDIO_QUEUE_MAX_SECONDS * 1000) / AUDIO_BLOCK_DURATION_MS)  # ~333 blocks
 
 # --- VAD & Segmentation Defaults ([BENCH] per architecture.md §5) ---
+# Note: Initial engineering defaults for quiet room; require calibration on real dataset (docs/research.md).
+VAD_ENERGY_THRESHOLD: float = 500.0  # RMS threshold for speech detection on 16-bit PCM
 VAD_PRE_ROLL_MS: int = 250
 VAD_HANGOVER_MS: int = 700
 MIN_UTTERANCE_MS: int = 250
@@ -60,6 +62,11 @@ class AppConfig:
     audio_sample_rate: int = AUDIO_SAMPLE_RATE
     audio_channels: int = AUDIO_CHANNELS
     audio_queue_max_seconds: int = AUDIO_QUEUE_MAX_SECONDS
+    vad_energy_threshold: float = VAD_ENERGY_THRESHOLD
+    vad_pre_roll_ms: int = VAD_PRE_ROLL_MS
+    vad_hangover_ms: int = VAD_HANGOVER_MS
+    min_utterance_ms: int = MIN_UTTERANCE_MS
+    max_utterance_ms: int = MAX_UTTERANCE_MS
     ui_poll_interval_ms: int = UI_POLL_INTERVAL_MS
     auto_accept_enabled: bool = AUTO_ACCEPT_ENABLED
     zero_requires_confirmation: bool = ZERO_REQUIRES_CONFIRMATION
@@ -68,3 +75,4 @@ class AppConfig:
     data_dir: Path = DATA_DIR_PATH
     models_dir: Path = MODELS_DIR_PATH
     vosk_model_path: Path = VOSK_MODEL_PATH
+

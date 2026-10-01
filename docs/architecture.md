@@ -94,10 +94,25 @@ Rules of responsibility: `numparse`, `decision`, `calculator`, `state` are **pur
 
 - **Capture (FIXED):** sounddevice `InputStream` with callback; callback only copies and enqueues; queue is bounded (DEFAULT ~10 s of audio); on overflow, drop-oldest is **not** allowed during an utterance — instead flag the utterance as `damaged` so the decision engine REJECTs it.
 - **Format (DEFAULT):** 16 kHz, mono, 16-bit PCM (matches Vosk and Whisper input needs; resample if device refuses).
-- **VAD [BENCH]:** start with a simple energy-threshold VAD with hangover (no extra dependency). Evaluate Silero VAD against it in Phase 4 using `research.md` VAD template; adopt Silero only if it measurably reduces missed/clipped utterances or false triggers. Note: the `silero-vad` PyPI package pulls PyTorch (large); an ONNX-runtime-based route is preferred if adopted, and its size cost must be justified.
-- **Segmentation (DEFAULT values, all [BENCH]):** pre-roll 200–300 ms; end-of-speech hangover ~700 ms; min utterance ~250 ms; max utterance ~6 s (longer → REJECT as `TOO_LONG`).
-- **Utterance stats** computed deterministically: duration, peak, RMS, clipping flag (samples at full scale), damaged flag.
-- **Stop:** `Stop` ends capture immediately; any in-progress utterance is **discarded**, not recognized (avoids surprise additions after Stop). Pending queue items are dropped.
+- **VAD Interface & Energy Baseline:**
+  ```python
+  class VADDetector(Protocol):
+      @property
+      def threshold(self) -> float: ...
+      def is_speech(self, audio: AudioFrame | bytes | ndarray) -> bool: ...
+      def analyze(self, audio: AudioFrame | bytes | ndarray) -> tuple[bool, float, int]: ...
+  ```
+  Initial baseline is `EnergyVAD` (RMS calculation on int16 PCM vs `VAD_ENERGY_THRESHOLD = 500.0`). Zero extra ML dependency.
+- **Utterance Segmentation (`UtteranceSegmenter`):**
+  Maintains a 3-state online finite state machine:
+  * `SILENCE`: Waiting for speech onset; buffers rolling pre-roll frames in a ring buffer (`VAD_PRE_ROLL_MS = 250 ms`).
+  * `SPEECH_ACTIVE`: Accumulating active speech frames; caps duration at `MAX_UTTERANCE_MS = 6000 ms` (flags `is_too_long = True`).
+  * `SPEECH_HANGOVER`: Trailing silence window (`VAD_HANGOVER_MS = 700 ms`). If speech resumes before expiry, returns to `SPEECH_ACTIVE`. If hangover elapses and speech duration >= `MIN_UTTERANCE_MS = 250 ms`, emits `Utterance`. If < min duration, discards as noise burst.
+- **Utterance Representation:**
+  `Utterance(pcm_data: bytes, duration_ms: float, sample_rate: int, channels: int, peak_amplitude: int, rms_energy: float, is_clipped: bool, is_damaged: bool, is_too_long: bool, start_timestamp_ns: int, end_timestamp_ns: int, frame_count: int)`
+- **Interaction with AudioSource & ASR:**
+  `MicrophoneCapture` → produces `AudioFrame` → `UtteranceSegmenter.process_frame()` → emits completed `Utterance` → `ASREngine.transcribe(utterance.pcm_data)`.
+- **Stop:** `Stop` ends capture immediately; `UtteranceSegmenter.reset()` discards any in-progress utterance (avoids surprise additions after Stop).
 - **Back-pressure:** one utterance is processed at a time; while processing, new audio still queues (bounded) and the next utterance is handled afterward. While `AWAITING_CONFIRMATION`, listening is **suspended** (capture may stay open but audio is discarded) until the user acts.
 
 ## 6. State Machine
