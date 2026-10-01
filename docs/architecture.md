@@ -233,12 +233,28 @@ class DecisionResult(frozen):
 6. **Error Mapping:** Hardware (`SOURCE_ERROR`), engine (`ASR_ERROR`), silence (`NO_SPEECH`), and buffer issues (`DAMAGED`, `TOO_LONG`) map to `REPEAT`. Linguistic/grammar rejections, command words, and out-of-range inputs map to `REJECT`.
 
 
-## 10. Deterministic Calculation Core
+## 10. Deterministic Calculation Core & History
 
-- `Calculator`: `total: int`, `entries: list[Entry]` (value, timestamp, outcome).
-- Operations: `add(value)` (0 ≤ value ≤ 2000 enforced), `undo()` (removes last added entry; returns it or None), `reset()`, `total` always **derived from** the entries (sum of non-undone added entries) or asserted equal to it in tests — no independent mutable total that can drift.
-- Python `int` (no floats). Non-added events (rejected/discarded) are stored in a separate display log, not in `entries`.
-- No I/O, no threading, no GUI imports.
+The calculator domain layer (`voice_calculator.calculator`) maintains the running total and ordered history of accepted additions.
+
+### Architectural Boundary:
+```text
+PipelineResult
+    ↓
+SafetyDecisionEngine
+    ↓
+if ACCEPT (and confirmed/auto-add):
+    Calculator.add(accepted_integer)
+```
+- **Separation of Concerns:** The calculator domain layer never parses speech, inspects ASR transcripts, or makes safety decisions. It receives only validated integer inputs from upstream.
+- **Pure Arithmetic:** Supports addition only (`total = total + accepted_integer`), where `0 <= value <= 2000`.
+- **Derived Total:** `total` is strictly derived from active history entries (`sum(entry.value for entry in entries)`), eliminating total drift.
+- **Immutable History:** Each accepted addition records an immutable `HistoryEntry` (sequence, value, running total, timestamp, timestamp_iso).
+- **Undo Operation:** Removes the most recent addition in LIFO order (`undo() -> Optional[HistoryEntry]`); safe on empty history (returns `None`).
+- **Reset Operation:** Clears all history entries and returns total to `0` (`reset()` / `clear()`).
+- **Strict Validation:** Rejects non-integers, floats, booleans, negative values, and out-of-range (>2000) values with `InvalidValueError`. Zero floating-point arithmetic.
+- **Zero Dependencies:** Pure domain logic with zero dependencies on audio, ASR, VAD, GUI, or speech parsing.
+
 
 ## 11. GUI and Threading Model
 
