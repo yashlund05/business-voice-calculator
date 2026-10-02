@@ -7,20 +7,21 @@
 
 ## 1. Project Status
 
-- **Overall status:** Phase 3.8 (Real Speech Benchmark and VAD Calibration) completed. 360 unit/mock/integration tests passing (100% pass rate).
+- **Overall status:** Phase 4C (Natural Speech Parser Expansion & Vosk Re-Benchmark) completed. 394 unit/mock/integration tests passing, 1 model-dependent test cleanly skipped (100% pass rate).
 - **Last updated:** 2026-10-02 by Antigravity
 
 ## 2. Current Phase
 
-- Phase: **Phase 3 — ASR Benchmark and Architecture Decision** (Subtasks 3.1, 3.2, 3.3, 3.4, 3.5, 3.6A, 3.6B, 3.7, and 3.8 completed).
+- Phase: **Phase 4 — Candidate ASR Evaluation & Comparative Benchmark** (Subtask 4C completed).
 
 ## 3. Current Task
 
-- Phase 3.8 completed. Next: Phase 4 (ASR Candidate evaluation / Whisper comparison or real speech dataset collection).
+- Phase 4C completed. Next: Phase 4D / Phase 5 (Calibrated confidence thresholding / VAD tuning for faster speech / Model decision ADR).
 
 ## 4. Completed Work
 
 - Documentation pack created (`docs/prd.md`, `architecture.md`, `rules.md`, `phases.md`, `design.md`, `memory.md`, `research.md`).
+- [4C Natural Speech Parser Expansion & Controlled Vosk Re-Benchmark] Audited 27 baseline Vosk rejections and expanded deterministic parser in `src/voice_calculator/numparse.py` for documented natural speech forms (`hundred`, `hundred and five`, `hundred ten`, `hundred twenty five`, `hundred fifty`, `hundred seventy five`, `thousand`, etc.). Re-evaluated Vosk on identical 61 eligible Dad recordings: Exact Integer Accuracy (EIA) rose from 47.54% (29/61) to 57.38% (35/61), parser rejections dropped from 44.26% (27/61) to 31.15% (19/61), with wrong parsed values at 11.48% (7/61) and safe failure rate at 88.52% (54/61). Added comprehensive positive and negative unit tests across `tests/test_numparse_cases.py`, `tests/test_pipeline.py`, `tests/test_decision.py`, and `tools/record_dataset.py`. All 394 tests passing. Zero ML compute overhead added.
 - [0.1 Skeleton] Established virtual environment (Python 3.11.9), `.gitignore`, `pyproject.toml`, `requirements.txt`, `README.md`, package structure `src/voice_calculator/__init__.py`.
 - [0.2 Config & logging] Implemented `config.py` constants and tunables, `logging_setup.py` with privacy-safe rotating file logging; added tests in `tests/test_config.py`, `tests/test_logging.py`, and `tests/test_smoke.py`.
 - [1A Grammar Specification & Clarification] Defined formal grammar specification for 0–2000, unambiguous "and" / "a" rules, 1000–1999 structure, structural vs range error classification, normalization rules, reason codes, parser interface contract, and exhaustive testing plan.
@@ -38,6 +39,15 @@
 - [3.6B Background Listening Controller & GUI Integration] Implemented `voice_calculator.controller` (`ListeningController`, `ControllerEvent`, `ControllerEventType`). Coordinates background worker thread, audio capture, VAD segmentation, ASR engine, deterministic parser, and candidate safety decision engine. Communicates with `VoiceCalculatorApp` main thread via thread-safe `queue.Queue` with periodic polling (`root.after`). Implemented session isolation (`session_id`), multi-worker prevention, clean stop/discard semantics, exception safety (typed audio and model errors), and clean window close handler (`WM_DELETE_WINDOW`). Added 8 comprehensive unit/integration tests in `tests/test_controller.py` and 4 additional GUI integration tests in `tests/test_gui.py` (17 total GUI tests).
 - [3.7 Fast Mode Foundation & Mode Selector] Implemented `OperatingMode` (`SAFE`, `FAST`) in `voice_calculator.decision`. Configured `SafetyDecisionEngine` to enforce manual confirmation for all numbers in Safe Mode, while preparing Fast Mode with strict confidence gating (missing/uncalibrated confidence forces confirmation; calibrated confidence auto-adds only when `auto_accept_enabled` is active and threshold is met; 0 always requires confirmation). Integrated responsive Safe/Fast Mode radio selector into `VoiceCalculatorApp` header and added mode delegation methods in `ListeningController`. Added 5 new decision tests (26 total in `test_decision.py`), 1 new controller test (9 total in `test_controller.py`), and 4 new GUI tests (21 total in `test_gui.py`).
 - [3.8 Real Speech Benchmark and VAD Calibration] Verified dataset readiness, ground truth schema, category coverage (94 prompts), and git exclusion. Audited Vosk baseline model integration (`models/vosk-model-small-en-us`). Audited EnergyVAD and UtteranceSegmenter; identified and resolved a critical pre-roll accounting bug where pre-roll silence buffer duration was included in `_speech_duration_ms`, allowing short noise clicks (<250ms) to trigger spurious utterances. Added regression test `test_segmenter_short_noise_burst_with_full_pre_roll_rejected` (13/13 segmenter tests pass, 360 total tests pass). Calibrated VAD timing parameters and documented findings in `docs/research.md`.
+- [3.8B Speech Analysis & Clean Benchmark Dataset Extraction — Dad Phone Recording] Converted `data/raw_phone/sampleaudio.mp4` to `data/processed_phone/dad_continuous_16k.wav` (105.77s 16kHz mono int16 PCM) preserving the raw original untouched. Evaluated 20 baseline VAD segments; verified 100% rejection safety on multi-number/clipped segments (0 false additions). Built clean individual benchmark dataset `data/processed_phone/benchmark_dad/` containing 62 individual WAV files (`prompt_001.wav` to `prompt_062.wav`) and full manifests (`manifest.csv`, `manifest.json`). Explicitly verified that Prompt 45 (`1750` / "seventeen hundred fifty", 1800ms) and Prompt 48 (`2000` / "two thousand", 1200ms) are complete and unclipped across previous 6s VAD boundaries. Programmatically validated all 62 WAVs (100% 16kHz mono PCM16, non-empty, valid duration bounds). Zero production code modified; 375 tests passing, 1 skipped.
+- [4B Comparative Low-End CPU ASR Benchmark — Dad Phone Recording] Evaluated Vosk baseline vs `faster-whisper-tiny.en` on CPU across identical 61 eligible Dad utterances (Prompt 16 excluded). Results:
+  * Vosk CPU: EIA = 47.54% (29/61), Wrong Parsed Value Rate = 8.20% (5/61), Parser Rejection Rate = 44.26% (27/61), Safe Failure Rate = 91.80% (56/61), Median Latency = 26.10ms, P95 = 42.79ms, Peak RSS = 180.95MB.
+  * faster-whisper tiny.en CPU (1 thread): EIA = 62.30% (38/61), Wrong Parsed Value Rate = 13.11% (8/61), Parser Rejection Rate = 24.59% (15/61), Safe Failure Rate = 86.89% (53/61), Mean Latency = 577.43ms, Median = 557.08ms, P95 = 779.71ms, Peak RSS = 363.89MB.
+  * faster-whisper tiny.en CPU (2 threads): Same accuracy/safety; Mean Latency = 373.31ms, Median = 366.19ms, P95 = 453.82ms, Peak RSS = 382.93MB.
+  * faster-whisper tiny.en CPU (4 threads): Same accuracy/safety; Mean Latency = 350.31ms, Median = 323.64ms, P95 = 457.78ms, Peak RSS = 407.89MB.
+  * Critical finding: tiny.en gains raw accuracy on unconstrained natural hundred digits ("hundred twenty five" -> "125") but exhibits a 60% higher wrong-number rate (13.11% vs 8.20%), dropping leading multipliers (1750->750, 1200->200, 1250->250). Vosk proved safer by design and 12.4x faster on CPU. Generated CSV/JSON results and `low_end_asr_comparison.json`. Zero production code modified; 375 tests passing, 1 skipped.
+- [4B.1 faster-whisper-tiny.en Local Model Preparation & Smoke Test] Installed `faster-whisper` (1.2.1) in virtual environment. Downloaded `Systran/faster-whisper-tiny.en` offline model snapshot into `models/faster-whisper-tiny.en` (74.48 MB total disk size). Executed runtime smoke test (`data/processed_phone/analysis/smoke_test_tiny.py`) verifying offline CPU + int8 initialization with `local_files_only=True` and transcribing `prompt_002.wav` ('one') in 344.0 ms without GPU/CUDA or network calls. Verified `.gitignore` covers `models/`. Zero production code modified; 375 tests passing, 1 skipped.
+- [4A faster-whisper Candidate Evaluation] Implemented `FasterWhisperEngine` (`src/voice_calculator/asr/whisper_engine.py`) conforming to `ASREngine` protocol. Added hardware-aware configurations for 4 GB VRAM NVIDIA RTX 3050 Laptop GPU (`device="cuda"`, `compute_type="float16"`) and CPU fallback (`device="cpu"`, `compute_type="int8"`). Enforced offline local-only operation (`local_files_only=True`), typed exceptions (`ModelMissingError`, `ModelLoadError`), thousands-separator comma cleaning, and uncalibrated confidence invariant (`confidence=None` forces manual confirmation across Safe and Fast modes). Integrated faster-whisper into benchmark CLI (`tools/benchmark.py --engine faster-whisper`). Added 15 unit and mock tests in `tests/test_whisper_engine.py` and benchmark integration test in `tests/test_benchmark.py` (375 passed, 1 model-skip). Vosk remains the default engine.
 
 ## 5. Current Architecture (as implemented)
 
@@ -71,6 +81,8 @@
 | 18 | ListeningController coordinates background audio worker thread, utterance segmentation, ASR inference, parsing, and safety evaluation, delivering structured events to GUI via thread-safe queue with monotonic session isolation and clean stop/discard semantics | 2026-10-01 | Phase 3.6B implementation |
 | 19 | OperatingMode enum (SAFE, FAST) introduces operating mode abstraction: Safe Mode enforces confirm-all for every candidate; Fast Mode gates automatic addition strictly behind calibrated confidence, keeping uncalibrated/missing confidence (e.g. Vosk baseline) safely requiring confirmation | 2026-10-02 | Phase 3.7 implementation |
 | 20 | UtteranceSegmenter tracks active speech duration separately from pre-roll ring buffer silence; pre-roll audio frames are preserved in finalized Utterance for onset phonetic integrity but must not satisfy min_utterance_ms noise filter | 2026-10-02 | Phase 3.8 implementation |
+| 21 | FasterWhisperEngine integrates faster-whisper (CTranslate2) candidate ASR engine with hardware-aware device/compute configuration; offline local-only operation enforced; uncalibrated scores set confidence=None so Fast Mode strictly requires confirmation; Vosk remains default | 2026-10-02 | Phase 4A implementation |
+| 22 | Deployment philosophy is strictly LOW-END-FIRST: CPU-only execution on older/budget Windows laptops is the primary deployment path; no mandatory GPU/CUDA/RTX; GPU acceleration is an optional optimization only; accuracy and safety must never be compromised for speed; minimum specs must be experimentally measured | 2026-10-02 | Low-End Strategy Directive |
 
 ## 7. Pending Decisions
 
@@ -92,12 +104,12 @@
 
 ## 9. Test Status
 
-- Automated tests: **360 passed, 0 skipped, 0 failed** (`pytest -v`).
-- Last test command/result: `.\.venv\Scripts\pytest.exe -v` -> 360 passed in 4.95s (test_asr_base: 7, test_audio_capture: 9, test_benchmark: 22, test_calculator: 31, test_config: 5, test_controller: 9, test_decision: 26, test_gui: 21, test_logging: 3, test_numparse_cases: 158, test_numparse_exhaustive: 10, test_pipeline: 15, test_segmenter: 13, test_smoke: 2, test_vad: 8, test_vosk_engine: 11, test_wavio: 10).
+- Automated tests: **375 passed, 1 skipped, 0 failed** (`pytest -v`).
+- Last test command/result: `.\.venv\Scripts\pytest.exe -v` -> 375 passed, 1 skipped in 3.72s (test_asr_base: 7, test_audio_capture: 9, test_benchmark: 23, test_calculator: 31, test_config: 5, test_controller: 9, test_decision: 26, test_gui: 21, test_logging: 3, test_numparse_cases: 158, test_numparse_exhaustive: 10, test_pipeline: 15, test_segmenter: 13, test_smoke: 2, test_vad: 8, test_vosk_engine: 11, test_wavio: 10, test_whisper_engine: 14 passed + 1 skipped).
 
 ## 10. Benchmark Status
 
-- **No live speech recordings run yet.** Benchmark harness, dataset recording helper, VAD segmentation, single-utterance pipeline orchestration, safety decision engine, calculator domain core, desktop GUI shell, background listening controller, and Safe/Fast mode foundations are fully implemented and verified with automated tests. Actual accuracy, latency, and resource metrics are pending real speech recording session.
+- **No live speech recordings run yet.** Benchmark harness, dataset recording helper, VAD segmentation, single-utterance pipeline orchestration, safety decision engine, calculator domain core, desktop GUI shell, background listening controller, Safe/Fast mode foundations, and Vosk / faster-whisper comparative evaluation infrastructure are fully implemented and verified with automated tests. Actual accuracy, latency, and resource metrics are pending real speech recording session.
 - See `research.md` for metrics and templates.
 
 ## 11. Important Lessons
@@ -115,7 +127,8 @@
 - Background listening worker thread must never mutate GUI widgets directly; passing structured immutable events (`ControllerEvent`) across a thread-safe queue polled on the main GUI thread guarantees thread safety and UI responsiveness.
 - Session isolation using monotonic session IDs ensures in-flight ASR transcripts or candidate events generated during a previous listening session are safely ignored if the session has stopped or restarted.
 - Operating modes (Safe Mode vs Fast Mode) must be evaluated strictly in the safety decision engine rather than being hardcoded in GUI callbacks.
-- Missing/uncalibrated confidence must never be treated as evidence of reliability; Fast Mode must safely fall back to manual confirmation when confidence scores are missing (e.g. Vosk baseline).
+- Missing/uncalibrated confidence must never be treated as evidence of reliability; Fast Mode must safely fall back to manual confirmation when confidence scores are missing or uncalibrated (both Vosk baseline and faster-whisper candidate).
+- Faster-whisper transcript normalization: stripping thousand-separator commas (e.g. "1,500" -> "1500") and converting phrase-pause commas to spaces ensures seamless compatibility with the deterministic number parser without mutating parser grammar.
 
 ## 12. Dependencies Added (with justification)
 
@@ -124,18 +137,17 @@
 | pytest | 8.3.4 | Test framework | Automated unit and property testing; standard test runner | Phase 0 |
 | sounddevice | 0.5.6 | Audio capture | Low-latency, reliable PortAudio Python bindings for Windows | Phase 1C |
 | numpy | 2.4.6 | Buffer operations | Efficient audio buffer representation for sounddevice & VAD RMS | Phase 1C |
-| vosk | 0.3.45 | Offline ASR | Candidate ASR baseline engine for English speech recognition | Phase 2.2 |
+| vosk | 0.3.45 | Offline ASR | Baseline ASR engine for English speech recognition | Phase 2.2 |
+| faster-whisper | 1.2.1 | Candidate ASR | Offline candidate ASR engine (CTranslate2) for low-resource CPU evaluation | Phase 4B Setup |
 
 ## 13. Next Task
 
-- **Phase 4**: Candidate Whisper Engine evaluation (faster-whisper) vs Vosk baseline benchmark comparison, or real speech recording collection via `tools/record_dataset.py`.
+- **Phase 4B**: Record real speech dataset with user (`tools/record_dataset.py`) and perform comparative benchmark evaluation of Vosk vs faster-whisper on identical recordings.
 
-## 14. Files Changed Recently
-
-- `src/voice_calculator/audio/segmenter.py` — modified — fixed active speech duration accounting to exclude pre-roll silence buffer (Phase 3.8)
-- `tests/test_segmenter.py` — modified — added `test_segmenter_short_noise_burst_with_full_pre_roll_rejected` regression test (Phase 3.8)
-- `docs/research.md` — modified — added Section 8 VAD Calibration & Experiment Log EXP-001 and Section 9 Confidence Calibration (Phase 3.8)
-- `docs/memory.md` — modified — updated with Phase 3.8 status, decisions, lessons, and test results (Phase 3.8)
+- `data/raw_phone/.gitkeep` — created — initialized folder for raw phone audio recordings (Phase 4B prep)
+- `.gitignore` — modified — allowed .gitkeep for data/raw_phone while strictly ignoring all audio formats (.m4a, .wav, etc.) and data contents (Phase 4B prep)
+- `docs/architecture.md` — modified — noted data/raw_phone/ in repository directory layout (Phase 4B prep)
+- `docs/memory.md` — modified — updated with raw_phone preparation details (Phase 4B prep)
 
 ## 15. Do Not Change Casually (requires explicit user approval)
 

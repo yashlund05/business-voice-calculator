@@ -150,7 +150,7 @@ DEFAULT_PROMPTS: List[PromptItem] = [
     PromptItem("thank you", None, "negative_non_number", "conversational"),
 
     # 7. Negatives: malformed number phrases
-    PromptItem("hundred fifty", None, "negative_malformed", "missing unit multiplier"),
+    PromptItem("ten hundred", None, "negative_malformed", "invalid scale multiplier"),
     PromptItem("twenty twenty", None, "negative_malformed", "adjacent tens without scale"),
     PromptItem("one twenty", None, "negative_malformed", "collated units/tens"),
     PromptItem("forty and five", None, "negative_malformed", "invalid 'and' between tens and units"),

@@ -149,7 +149,7 @@ def test_pipeline_speech_to_parser_rejection_command_word() -> None:
 
 
 def test_pipeline_speech_to_parser_rejection_malformed() -> None:
-    pipeline = create_pipeline(default_text="hundred fifty")
+    pipeline = create_pipeline(default_text="ten hundred")
 
     for _ in range(4):
         pipeline.source.push_pcm_bytes(make_sine_pcm(amplitude=2000))
@@ -167,7 +167,7 @@ def test_pipeline_speech_to_parser_rejection_malformed() -> None:
 
     assert result.status == PipelineStatus.PARSER_REJECTED
     assert result.parsed_value is None
-    assert result.recognized_text == "hundred fifty"
+    assert result.recognized_text == "ten hundred"
     assert result.reject_reason == RejectReason.MALFORMED
 
 

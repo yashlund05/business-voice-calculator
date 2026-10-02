@@ -84,7 +84,7 @@ tools/
   benchmark.py       # offline benchmark over a local labeled recordings folder
   record_dataset.py  # guided recording helper (writes to git-ignored data/)
 tests/               # pytest; mirrors modules
-data/                # git-ignored: recordings, labels, results
+data/                # git-ignored: recordings, labels, results, raw_phone/ (manually supplied phone audio)
 models/              # git-ignored: ASR model files
 ```
 
@@ -161,23 +161,42 @@ Any (state, event) pair not in this table is invalid: the controller ignores it 
 
 ## 7. ASR Abstraction and Candidate Strategy
 
-```
-class ASREngine (protocol):
+```python
+class ASREngine(Protocol):
     name: str
-    def load() -> None
-    def transcribe(pcm: bytes|ndarray, sample_rate: int) -> ASRResult
-class ASRResult: text: str, confidence: float|None, alternatives: list[str], engine: str, elapsed_ms: float
+    @property
+    def is_loaded(self) -> bool: ...
+    def load(self) -> None: ...
+    def transcribe(self, pcm_data: bytes | np.ndarray, sample_rate: int = 16000) -> ASRResult: ...
+
+@dataclass(frozen=True)
+class ASRResult:
+    text: str = ""
+    confidence: Optional[float] = None
+    alternatives: List[str] = field(default_factory=list)
+    engine: str = ""
+    elapsed_ms: float = 0.0
+    status: ASRStatus = ASRStatus.SUCCESS
+    error_message: Optional[str] = None
 ```
 
 The interface is the only coupling between recognition and the rest of the app. `confidence` is optional and is **only a weak input signal** (never proof of correctness).
 
 | Candidate | Strengths (hypotheses) | Risks (hypotheses) |
 |-----------|------------------------|--------------------|
-| **A. Vosk small English + constrained grammar of number words** | Small, fast, offline, grammar limits outputs to number words | Grammar-constrained decoders can force a wrong in-grammar answer on noise; accent sensitivity |
-| **B. faster-whisper (`tiny.en` / `base.en` / `small.en`, CPU int8)** | Often robust to accents/noise; good number-word output | Larger/slower; free-form text (hallucinations on silence); digit/word format variance; no hard grammar |
-| **C. Hybrid (A primary, B only when needed or as cross-check)** | Agreement between independent engines is a measurable validation signal | Complexity, latency, memory; **not assumed necessary** |
+| **A. Vosk small English + constrained grammar of number words** (Default) | Small (~50 MB), fast (<50ms), fully offline, grammar limits outputs to number words | Grammar-constrained decoders can force a wrong in-grammar answer on noise; accent sensitivity |
+| **B. faster-whisper (`base.en` / `small.en`, CPU int8 or CUDA fp16)** (Candidate - Phase 4A) | Robust to acoustic variations and diverse accents; high transcription fidelity | Larger memory footprint; free-form output requires punctuation cleanup (commas); uncalibrated confidence |
+| **C. Hybrid (A primary, B only when needed or as cross-check)** | Agreement between independent engines is a measurable validation signal | Latency, memory overhead; **not assumed necessary** |
 
-**Current recommendation (DEFAULT, not a decision):** implement candidate A as the Phase 2 baseline. Phase 3 benchmarks A and B (and C as an *offline* agreement analysis) on the same recordings, then records an ADR. Adding B or C to the app, or fine-tuning anything, is allowed only after that ADR **[BENCH]**.
+### faster-whisper Candidate Engine Integration (Phase 4A)
+- **Engine Implementation:** `FasterWhisperEngine` in `src/voice_calculator/asr/whisper_engine.py` conforming to `ASREngine`.
+- **Hardware-Aware Configuration:** Configurable via `config.py` and environment variables (`VOICE_CALC_WHISPER_MODEL_PATH`, `VOICE_CALC_WHISPER_DEVICE`, `VOICE_CALC_WHISPER_COMPUTE_TYPE`).
+  * Target Hardware Profile: Windows, NVIDIA RTX 3050 Laptop GPU (4 GB VRAM), 20 GB RAM, Python 3.11.
+  * Defaults: `faster-whisper-base.en`, `device="cpu"`, `compute_type="int8"` (switchable to `device="cuda"`, `compute_type="float16"` for GPU).
+- **Offline Invariant:** Strictly uses local model files (`local_files_only=True`); no runtime downloading or network calls. Missing models raise typed `ModelMissingError`.
+- **Uncalibrated Confidence Invariant:** Faster-whisper raw segment logprobs or token probabilities are uncalibrated and returned as `confidence = None`. Under both Safe Mode and Fast Mode, `SafetyDecisionEngine` forces `requires_confirmation = True`. Automatic addition remains disabled (`AUTO_ACCEPT_ENABLED = False`).
+- **Punctuation Normalization:** Cleans thousands-separator commas (e.g. `"1,500"` -> `"1500"`) and converts speech pause commas to spaces before parsing with `numparse.py`.
+- **Engine Status:** **Vosk small remains the default application engine.** faster-whisper is integrated strictly as an offline candidate for comparative evaluation on the real speech dataset.
 
 ## 8. Number Parser and Validation Design
 

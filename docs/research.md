@@ -119,7 +119,9 @@ Ground truth per utterance: a valid integer v (0–2000) or `NEGATIVE`. "Added" 
 
 | ID | Title | Date | Status | Outcome |
 |----|-------|------|--------|---------|
-| _none yet_ | | | | |
+| EXP-001 | Analysis of Dad's Continuous Phone Recording & Baseline VAD Segmentation | 2026-10-02 | Completed | Baseline VAD (500 RMS / 700ms hangover) kept speech active across pauses due to 450-550 RMS room floor, hitting 6.0s max utterance cap on 16/20 segments. Mapped 62 spoken prompts in audio. Demonstrated need for calibrated VAD threshold/hangover or discrete utterance slicing for single-utterance benchmarking. |
+| EXP-002 | Low-End CPU ASR Benchmark: Vosk Baseline vs faster-whisper tiny.en (1/2/4 threads) on Dad Speech Baseline | 2026-10-02 | Completed | Evaluated on identical 61 eligible Dad utterances (slower-than-working-speed): Vosk CPU (EIA=47.54%, Wrong=8.20%, Rej=44.26%, Safe=91.80%, Median Latency=26.1ms, Peak RSS=180.95MB); tiny.en CPU across 1/2/4 threads (EIA=62.30%, Wrong=13.11%, Rej=24.59%, Safe=86.89%, Latency: 1t=557.1ms, 2t=366.2ms, 4t=323.6ms, Peak RSS=363.89MB to 407.89MB). Critical finding: tiny.en increased raw accuracy (+14.76%) on natural hundred forms but produced a 60% higher wrong-number rate (13.11% vs 8.20%), dropping leading thousand multipliers (e.g. 1750->750, 1200->200). Vosk proved safer by design (91.80% vs 86.89% safe failure rate) and 12.4x faster on CPU. |
+| EXP-003 | Natural Speech Parser Expansion & Controlled Vosk Re-Benchmark | 2026-10-02 | Completed | Deterministic parser extended for natural bare hundred/thousand forms ('hundred', 'hundred ten', 'hundred twenty five', 'hundred fifty', 'hundred seventy five', 'thousand'). Vosk re-benchmark on identical 61 eligible Dad recordings: EIA increased from 47.54% to 57.38% (+9.84% gain, +6 correct numbers parsed with 0 added compute/ML complexity). Rejection rate dropped from 44.26% to 31.15%. Wrong parsed values rose from 8.20% (5/61) to 11.48% (7/61) due to ASR deletion of leading multipliers ('two thousand' transcribed as 'thousand' -> 1000; 'twelve hundred fifty' transcribed as 'hundred fifteen' -> 115). Safe failure rate remains high at 88.52% (vs Whisper 86.89%). Proves 22% of Vosk's baseline rejections were purely grammar-induced and recoverable safely by deterministic parsing. |
 
 ## 6. Results Table Template
 
@@ -131,9 +133,9 @@ Template — all `PENDING`.
 
 ## 7. Model Comparison Template
 
-Same dataset/split and same policy for every row. All `PENDING`.
+Same dataset/split and same policy for every row. All empirical metrics `PENDING` user speech recordings.
 
-| Metric | A: Vosk+grammar | B1: tiny.en | B2: base.en | B3: small.en | C: hybrid analysis |
+| Metric | A: Vosk+grammar (Default) | B1: tiny.en | B2: base.en (Candidate) | B3: small.en | C: hybrid analysis |
 |--------|-----------------|-------------|-------------|--------------|--------------------|
 | EIA | PENDING | PENDING | PENDING | PENDING | PENDING |
 | Errors on confusable pairs (count) | PENDING | PENDING | PENDING | PENDING | PENDING |
@@ -141,11 +143,20 @@ Same dataset/split and same policy for every row. All `PENDING`.
 | Output on NEGATIVE non-speech (hallucinated numbers, count) | PENDING | PENDING | PENDING | PENDING | PENDING |
 | Output on NEGATIVE non-numbers (parsed as number, count) | PENDING | PENDING | PENDING | PENDING | PENDING |
 | Latency p50 / p95 (ms) | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Model load time (s) | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Peak RAM (MB) | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Disk size (MB) | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Model load time (s) | PENDING (~1.9s) | PENDING | PENDING | PENDING | PENDING |
+| Peak RAM / VRAM (MB) | PENDING (~50MB RAM) | PENDING | PENDING | PENDING | PENDING |
+| Disk size (MB) | ~50 MB | ~75 MB | ~140 MB | ~460 MB | PENDING |
 | Hybrid: of errors, % flagged by disagreement | n/a | n/a | n/a | n/a | PENDING |
 | Hybrid: of correct, % falsely flagged by disagreement | n/a | n/a | n/a | n/a | PENDING |
+
+### Phase 4A Candidate Infrastructure Summary:
+- **faster-whisper Candidate Engine:** `FasterWhisperEngine` implemented in `src/voice_calculator/asr/whisper_engine.py` conforming to `ASREngine`.
+- **Target Hardware Constraints:** Windows 11, NVIDIA RTX 3050 Laptop GPU (4 GB VRAM), 20 GB RAM, Python 3.11.
+- **Recommended Candidate Model:** `faster-whisper-base.en` (compact ~140MB CTranslate2 model, highly efficient on 4GB VRAM in `float16`/`int8_float16` or multi-threaded CPU `int8`).
+- **Benchmark Command:**
+  * Vosk baseline: `python tools/benchmark.py --engine vosk --dataset-dir data/recordings`
+  * faster-whisper candidate: `python tools/benchmark.py --engine faster-whisper --dataset-dir data/recordings --device cpu --compute-type int8` (or `--device cuda --compute-type float16`)
+- **Uncalibrated Score Invariant:** Raw Whisper logprobs and token probabilities are uncalibrated and returned as `confidence = None`. Auto-accept is strictly prohibited without empirical calibration data. Vosk remains the default engine.
 
 ## 8. VAD Experiment & Calibration Record
 

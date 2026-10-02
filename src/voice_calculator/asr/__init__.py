@@ -14,6 +14,10 @@ from voice_calculator.asr.vosk_engine import (
     VoskEngine,
     get_default_number_grammar,
 )
+from voice_calculator.asr.whisper_engine import (
+    FasterWhisperEngine,
+    WhisperConfig,
+)
 
 __all__ = [
     "ASREngine",
@@ -22,8 +26,11 @@ __all__ = [
     "ASRStatus",
     "DEFAULT_NUMBER_GRAMMAR",
     "FakeEngine",
+    "FasterWhisperEngine",
     "ModelLoadError",
     "ModelMissingError",
     "VoskEngine",
+    "WhisperConfig",
     "get_default_number_grammar",
 ]
+

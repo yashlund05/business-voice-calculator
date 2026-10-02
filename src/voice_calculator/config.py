@@ -49,8 +49,15 @@ DATA_DIR_PATH: Path = PROJECT_ROOT / "data"
 MODELS_DIR_PATH: Path = PROJECT_ROOT / "models"
 
 import os
+
 VOSK_DEFAULT_MODEL_NAME: str = "vosk-model-small-en-us"
 VOSK_MODEL_PATH: Path = Path(os.environ.get("VOICE_CALC_VOSK_MODEL_PATH", MODELS_DIR_PATH / VOSK_DEFAULT_MODEL_NAME))
+
+# --- faster-whisper Candidate ASR Settings (Phase 4A per architecture.md §7, §13) ---
+WHISPER_DEFAULT_MODEL_NAME: str = "faster-whisper-base.en"
+WHISPER_MODEL_PATH: Path = Path(os.environ.get("VOICE_CALC_WHISPER_MODEL_PATH", MODELS_DIR_PATH / WHISPER_DEFAULT_MODEL_NAME))
+WHISPER_DEVICE: str = os.environ.get("VOICE_CALC_WHISPER_DEVICE", "cpu")
+WHISPER_COMPUTE_TYPE: str = os.environ.get("VOICE_CALC_WHISPER_COMPUTE_TYPE", "int8")
 
 
 @dataclass(frozen=True)
@@ -75,4 +82,7 @@ class AppConfig:
     data_dir: Path = DATA_DIR_PATH
     models_dir: Path = MODELS_DIR_PATH
     vosk_model_path: Path = VOSK_MODEL_PATH
+    whisper_model_path: Path = WHISPER_MODEL_PATH
+    whisper_device: str = WHISPER_DEVICE
+    whisper_compute_type: str = WHISPER_COMPUTE_TYPE
 

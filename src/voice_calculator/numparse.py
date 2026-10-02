@@ -307,19 +307,14 @@ def _parse_tokens(tokens: List[str], normalized: str) -> ParseResult:
     # Check invalid scale multipliers: "ten hundred", "twenty hundred", "fifty hundred"
     if "hundred" in tokens:
         h_idx = tokens.index("hundred")
-        if h_idx == 0:
-            return _reject(RejectReason.MALFORMED, normalized)
-        prev = tokens[h_idx - 1]
-        if prev == "ten" or prev in _TENS:
-            # Check "twenty five hundred" -> 2500 (grammatically valid number out of range)
-            if h_idx == 2 and tokens[0] in _TENS and tokens[1] in _UNITS:
-                pass  # compound tens before hundred e.g. "twenty five hundred" -> OUT_OF_RANGE
-            else:
-                return _reject(RejectReason.MALFORMED, normalized)
-
-    # Check "thousand" alone at start
-    if tokens[0] == "thousand":
-        return _reject(RejectReason.MALFORMED, normalized)
+        if h_idx > 0:
+            prev = tokens[h_idx - 1]
+            if prev == "ten" or prev in _TENS:
+                # Check "twenty five hundred" -> 2500 (grammatically valid number out of range)
+                if h_idx == 2 and tokens[0] in _TENS and tokens[1] in _UNITS:
+                    pass  # compound tens before hundred e.g. "twenty five hundred" -> OUT_OF_RANGE
+                else:
+                    return _reject(RejectReason.MALFORMED, normalized)
 
     # Check "one thousand fifteen hundred" (thousand combined with teen-hundred)
     if "thousand" in tokens and "hundred" in tokens:
@@ -340,7 +335,16 @@ def _parse_tokens(tokens: List[str], normalized: str) -> ParseResult:
     total_val = 0
 
     # 1. Thousand Clause
-    if idx < n and (tokens[idx] in _UNITS or tokens[idx] == "a") and idx + 1 < n and tokens[idx + 1] == "thousand":
+    if idx < n and tokens[idx] == "thousand":
+        total_val += 1000
+        idx += 1
+
+        # Optional connective "and" after thousand
+        if idx < n and tokens[idx] == "and":
+            idx += 1
+            if idx >= n:
+                return _reject(RejectReason.MALFORMED, normalized)
+    elif idx < n and (tokens[idx] in _UNITS or tokens[idx] == "a") and idx + 1 < n and tokens[idx + 1] == "thousand":
         th_mult = 1 if tokens[idx] == "a" else _UNITS[tokens[idx]]
         total_val += th_mult * 1000
         idx += 2
@@ -355,15 +359,16 @@ def _parse_tokens(tokens: List[str], normalized: str) -> ParseResult:
     if idx < n and "hundred" in tokens[idx:]:
         h_pos = tokens.index("hundred", idx)
         # Multiplier before hundred can be:
-        # - "a" or unit (1..9)
+        # - Empty (bare "hundred" e.g. "hundred", "hundred and five", "hundred twenty five") -> multiplier 1
+        # - "a" or unit (1..9) -> multiplier 1..9
         # - teen (11..19) for teen-hundreds
         # - compound tens (e.g. "twenty five" in "twenty five hundred" -> 2500)
         mult_tokens = tokens[idx:h_pos]
-        if not mult_tokens:
-            return _reject(RejectReason.MALFORMED, normalized)
 
         h_mult = 0
-        if len(mult_tokens) == 1:
+        if not mult_tokens:
+            h_mult = 1
+        elif len(mult_tokens) == 1:
             m = mult_tokens[0]
             if m == "a":
                 h_mult = 1

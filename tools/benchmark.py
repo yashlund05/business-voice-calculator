@@ -18,15 +18,22 @@ import sys
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
-from voice_calculator.asr.base import ASREngine, FakeEngine, ModelMissingError
+from voice_calculator.asr.base import ASREngine, FakeEngine, ModelLoadError, ModelMissingError
 from voice_calculator.asr.vosk_engine import VoskEngine
+from voice_calculator.asr.whisper_engine import FasterWhisperEngine
 from voice_calculator.benchmark import (
     export_results_csv,
     format_benchmark_report,
     load_labels_csv,
     run_benchmark,
 )
-from voice_calculator.config import DATA_DIR_PATH, VOSK_MODEL_PATH
+from voice_calculator.config import (
+    DATA_DIR_PATH,
+    VOSK_MODEL_PATH,
+    WHISPER_COMPUTE_TYPE,
+    WHISPER_DEVICE,
+    WHISPER_MODEL_PATH,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -48,15 +55,33 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--engine",
-        choices=["vosk", "fake"],
+        choices=["vosk", "whisper", "faster-whisper", "fake"],
         default="vosk",
         help="ASR engine backend to evaluate (default: vosk)",
     )
     parser.add_argument(
         "--model-path",
         type=Path,
-        default=VOSK_MODEL_PATH,
-        help="Path to Vosk model directory (default: models/vosk-model-small-en-us)",
+        default=None,
+        help="Path to model directory (default: VOSK_MODEL_PATH for Vosk, WHISPER_MODEL_PATH for Whisper)",
+    )
+    parser.add_argument(
+        "--device",
+        type=str,
+        default=WHISPER_DEVICE,
+        help="Inference device for faster-whisper ('cpu', 'cuda', 'auto') (default: from config/env)",
+    )
+    parser.add_argument(
+        "--compute-type",
+        type=str,
+        default=WHISPER_COMPUTE_TYPE,
+        help="Compute type for faster-whisper ('int8', 'float16', 'int8_float16', 'default') (default: from config/env)",
+    )
+    parser.add_argument(
+        "--cpu-threads",
+        type=int,
+        default=4,
+        help="Number of CPU threads for faster-whisper inference (default: 4)",
     )
     parser.add_argument(
         "--output-csv",
@@ -91,7 +116,13 @@ def main() -> int:
     print(f"Labels CSV path:   {labels_path}")
     print(f"Engine requested:  {args.engine}")
     if args.engine == "vosk":
-        print(f"Vosk model path:   {args.model_path}")
+        model_p = args.model_path or VOSK_MODEL_PATH
+        print(f"Vosk model path:   {model_p}")
+    elif args.engine in ("whisper", "faster-whisper"):
+        model_p = args.model_path or WHISPER_MODEL_PATH
+        print(f"Whisper model:     {model_p}")
+        print(f"Device:            {args.device}")
+        print(f"Compute type:      {args.compute_type}")
     if args.split:
         print(f"Split filter:      {args.split}")
     if args.category:
@@ -130,19 +161,43 @@ def main() -> int:
     # 3. Instantiate Engine
     engine: ASREngine
     if args.engine == "vosk":
+        vosk_path = args.model_path or VOSK_MODEL_PATH
         try:
-            engine = VoskEngine(model_path=args.model_path)
-            print(f"Initializing Vosk model from: {args.model_path} ...")
+            engine = VoskEngine(model_path=vosk_path)
+            print(f"Initializing Vosk model from: {vosk_path} ...")
             engine.load()
             print("Vosk model loaded successfully.")
         except ModelMissingError:
-            print(f"\n[ERROR] Vosk model directory missing: {args.model_path}")
+            print(f"\n[ERROR] Vosk model directory missing: {vosk_path}")
             print("\nPlease download the official lightweight model and extract it:")
             print("  URL: https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip")
-            print(f"  Target directory: {args.model_path}")
+            print(f"  Target directory: {vosk_path}")
             return 1
         except Exception as e:
             print(f"\n[ERROR] Failed to load Vosk engine: {e}")
+            return 1
+    elif args.engine in ("whisper", "faster-whisper"):
+        whisper_path = args.model_path or WHISPER_MODEL_PATH
+        try:
+            engine = FasterWhisperEngine(
+                model_path_or_size=whisper_path,
+                device=args.device,
+                compute_type=args.compute_type,
+                cpu_threads=args.cpu_threads,
+            )
+            print(f"Initializing faster-whisper model from: {whisper_path} (device={args.device}, compute_type={args.compute_type}, cpu_threads={args.cpu_threads}) ...")
+            engine.load()
+            print("faster-whisper model loaded successfully.")
+        except ModelMissingError:
+            print(f"\n[ERROR] faster-whisper model directory missing: {whisper_path}")
+            print("\nPlease prepare the local model directory:")
+            print(f"  Target directory: {whisper_path}")
+            return 1
+        except ModelLoadError as e:
+            print(f"\n[ERROR] Failed to load faster-whisper engine: {e}")
+            return 1
+        except Exception as e:
+            print(f"\n[ERROR] Unexpected error loading faster-whisper engine: {e}")
             return 1
     elif args.engine == "fake":
         engine = FakeEngine(name="fake_benchmark_engine", default_text="one hundred")

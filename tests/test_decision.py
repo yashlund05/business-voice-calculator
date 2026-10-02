@@ -220,11 +220,11 @@ class TestSafetyDecisionEngine:
         assert result.reason == DecisionReason.UNAVAILABLE_CONFIDENCE
 
     def test_parser_rejection_malformed_number_is_rejected(self):
-        """Malformed grammar phrases (e.g. 'hundred fifty') are REJECT."""
+        """Malformed grammar phrases (e.g. 'ten hundred') are REJECT."""
         engine = SafetyDecisionEngine()
         pipe_res = make_pipeline_result(
             status=PipelineStatus.PARSER_REJECTED,
-            text="hundred fifty",
+            text="ten hundred",
         )
 
         result = engine.evaluate(pipe_res)

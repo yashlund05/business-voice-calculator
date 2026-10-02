@@ -414,3 +414,52 @@ def test_ensure_labels_csv(tmp_path: Path) -> None:
     header = target_csv.read_text(encoding="utf-8").strip()
     assert header == "file,expected_value_or_NEGATIVE,category,speaker,session_id,split,notes"
 
+
+# --- 7. Engine Compatibility Benchmark Tests ---
+
+
+def test_benchmark_with_whisper_engine_mock(tmp_path: Path) -> None:
+    """Verifies that FasterWhisperEngine integrates seamlessly with run_benchmark and metrics calculation."""
+    import sys
+    from unittest.mock import MagicMock, patch
+    from voice_calculator.asr.whisper_engine import FasterWhisperEngine
+
+    # Prepare fake dataset
+    wav_path = tmp_path / "test_sample.wav"
+    silence_pcm = b"\x00" * 3200  # 100ms silence
+    write_wav(wav_path, silence_pcm)
+
+    label = SampleLabel(
+        file="test_sample.wav",
+        expected_value=100,
+        category="canonical",
+        speaker="tester",
+    )
+
+    model_dir = tmp_path / "mock_whisper_dir"
+    model_dir.mkdir()
+
+    mock_seg = MagicMock()
+    mock_seg.text = "one hundred"
+
+    mock_fw = MagicMock()
+    mock_model_inst = MagicMock()
+    mock_model_inst.transcribe.return_value = ([mock_seg], MagicMock())
+    mock_fw.WhisperModel.return_value = mock_model_inst
+
+    with patch.dict(sys.modules, {"faster_whisper": mock_fw}):
+        engine = FasterWhisperEngine(model_path_or_size=model_dir)
+        results, metrics = run_benchmark(
+            engine=engine,
+            dataset_dir=tmp_path,
+            labels=[label],
+        )
+
+        assert len(results) == 1
+        assert results[0].outcome == SampleOutcome.CORRECT_ACCEPT
+        assert results[0].parsed_value == 100
+        assert metrics.correct_accept_count == 1
+        assert metrics.exact_integer_accuracy == 1.0
+        assert metrics.false_addition_count == 0
+
+
