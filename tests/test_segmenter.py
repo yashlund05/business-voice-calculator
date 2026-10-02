@@ -155,10 +155,36 @@ def test_segmenter_short_noise_burst_rejected() -> None:
     assert res1 is None
     res2 = seg.process_frame(make_frame(is_speech=False))
 
-    # Should be discarded as short noise burst (speech duration was only ~90 ms with pre-roll < 200 ms)
+    # Should be discarded as short noise burst (speech duration was only 30 ms < 200 ms)
     assert res2 is None
     assert seg.state == SegmenterState.SILENCE
     assert seg.is_in_speech is False
+
+
+def test_segmenter_short_noise_burst_with_full_pre_roll_rejected() -> None:
+    """Regression test: pre-roll silence buffer (250ms) must not count toward min_utterance_ms for a 30ms click."""
+    seg = UtteranceSegmenter(
+        vad=EnergyVAD(energy_threshold=500.0),
+        pre_roll_ms=250,       # ~8 frames (240ms) of pre-roll
+        hangover_ms=60,        # 2 frames hangover
+        min_utterance_ms=250,  # Requires at least 250ms of active speech
+    )
+
+    # 1. 10 frames of silence (300 ms) -> fills 250ms pre-roll ring buffer completely
+    for _ in range(10):
+        seg.process_frame(make_frame(is_speech=False))
+
+    # 2. 1 frame of click / noise spike (30 ms)
+    seg.process_frame(make_frame(is_speech=True))
+    assert seg.state == SegmenterState.SPEECH_ACTIVE
+
+    # 3. 2 frames of hangover silence (60 ms)
+    seg.process_frame(make_frame(is_speech=False))
+    res = seg.process_frame(make_frame(is_speech=False))
+
+    # Click must be discarded because active speech (30ms) < min_utterance_ms (250ms)
+    assert res is None
+    assert seg.state == SegmenterState.SILENCE
 
 
 # --- 5. Speech Resumed During Hangover ---

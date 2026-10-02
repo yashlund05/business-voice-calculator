@@ -11,6 +11,7 @@ from voice_calculator.decision import (
     DecisionReason,
     DecisionResult,
     DecisionType,
+    OperatingMode,
     SafetyDecisionEngine,
     evaluate_candidate,
 )
@@ -37,6 +38,7 @@ __all__ = [
     "HistoryEntry",
     "InvalidValueError",
     "ListeningController",
+    "OperatingMode",
     "PipelineResult",
     "PipelineStatus",
     "SafetyDecisionEngine",

@@ -40,6 +40,13 @@ class DecisionType(Enum):
     REJECT = "REJECT"  # Definitely not a supported number or invalid linguistic structure
 
 
+class OperatingMode(Enum):
+    """Application operating mode governing confirmation policies."""
+
+    SAFE = "SAFE"  # Every accepted candidate requires manual confirmation
+    FAST = "FAST"  # Numbers meeting validated reliability policy may be auto-accepted
+
+
 class DecisionReason(Enum):
     """Detailed diagnostic reason explaining the decision."""
 
@@ -75,6 +82,7 @@ class DecisionReason(Enum):
 class DecisionConfig:
     """Configurable policy thresholds for safety evaluation."""
 
+    mode: OperatingMode = OperatingMode.SAFE
     auto_accept_enabled: bool = AUTO_ACCEPT_ENABLED
     zero_requires_confirmation: bool = ZERO_REQUIRES_CONFIRMATION
     min_confidence: Optional[float] = None  # None = uncalibrated threshold (not enforced)
@@ -96,6 +104,7 @@ class DecisionResult:
         confidence: ASR acoustic/language confidence if available.
         recognized_text: Spoken text transcribed by ASR.
         pipeline_status: Raw pipeline status that was evaluated.
+        mode: Operating mode (SAFE or FAST) under which decision was evaluated.
     """
 
     decision: DecisionType
@@ -106,6 +115,7 @@ class DecisionResult:
     confidence: Optional[float] = None
     recognized_text: str = ""
     pipeline_status: Optional[PipelineStatus] = None
+    mode: OperatingMode = OperatingMode.SAFE
 
     @property
     def is_accepted(self) -> bool:
@@ -134,6 +144,16 @@ class SafetyDecisionEngine:
     def __init__(self, config: Optional[DecisionConfig] = None) -> None:
         self.config = config or DecisionConfig()
 
+    @property
+    def mode(self) -> OperatingMode:
+        """The currently configured OperatingMode (SAFE or FAST)."""
+        return self.config.mode
+
+    def set_mode(self, mode: OperatingMode) -> None:
+        """Sets the operating mode (SAFE or FAST) on the decision engine."""
+        from dataclasses import replace
+        self.config = replace(self.config, mode=mode)
+
     def evaluate(self, pipeline_result: Optional[PipelineResult]) -> DecisionResult:
         """Evaluates a single PipelineResult against deterministic safety rules.
 
@@ -154,6 +174,7 @@ class SafetyDecisionEngine:
                 requires_confirmation=False,
                 explanation=f"Internal decision evaluation exception: {e}",
                 pipeline_status=getattr(pipeline_result, "status", None),
+                mode=self.config.mode,
             )
 
     def _evaluate_internal(self, pipeline_result: Optional[PipelineResult]) -> DecisionResult:
@@ -165,6 +186,7 @@ class SafetyDecisionEngine:
                 reason=DecisionReason.UNKNOWN_STATUS,
                 requires_confirmation=False,
                 explanation="Invalid or null pipeline result received.",
+                mode=self.config.mode,
             )
 
         status = pipeline_result.status
@@ -179,6 +201,7 @@ class SafetyDecisionEngine:
                 explanation=pipeline_result.error_message or "Microphone capture error; please repeat.",
                 recognized_text=pipeline_result.recognized_text,
                 pipeline_status=status,
+                mode=self.config.mode,
             )
 
         # 2. ASR Engine errors -> REPEAT
@@ -191,6 +214,7 @@ class SafetyDecisionEngine:
                 explanation=pipeline_result.error_message or "Speech recognition failed; please repeat.",
                 recognized_text=pipeline_result.recognized_text,
                 pipeline_status=status,
+                mode=self.config.mode,
             )
 
         # 3. No speech / silence -> REPEAT
@@ -203,6 +227,7 @@ class SafetyDecisionEngine:
                 explanation="No clear speech detected; please repeat.",
                 recognized_text="",
                 pipeline_status=status,
+                mode=self.config.mode,
             )
 
         # 4. Utterance duration exceeded cap -> REPEAT
@@ -215,6 +240,7 @@ class SafetyDecisionEngine:
                 explanation=pipeline_result.error_message or "Utterance was too long; please speak shorter numbers.",
                 recognized_text="",
                 pipeline_status=status,
+                mode=self.config.mode,
             )
 
         # 5. Audio damaged / queue overflow -> REPEAT
@@ -227,6 +253,7 @@ class SafetyDecisionEngine:
                 explanation=pipeline_result.error_message or "Audio queue overflow occurred; please repeat.",
                 recognized_text="",
                 pipeline_status=status,
+                mode=self.config.mode,
             )
 
         # 6. Parser rejection -> REJECT with specific linguistic reason
@@ -276,6 +303,7 @@ class SafetyDecisionEngine:
                 confidence=pipeline_result.confidence,
                 recognized_text=pipeline_result.recognized_text,
                 pipeline_status=status,
+                mode=self.config.mode,
             )
 
         # 7. Parsed candidate integer -> Evaluate confidence & confirmation policies
@@ -291,6 +319,7 @@ class SafetyDecisionEngine:
                     requires_confirmation=False,
                     explanation="Parser indicated success but produced no integer value.",
                     pipeline_status=status,
+                    mode=self.config.mode,
                 )
 
             # Extra boundary safety check
@@ -303,6 +332,7 @@ class SafetyDecisionEngine:
                     explanation=f"Value {parsed_val} is outside allowed range {self.config.min_number}–{self.config.max_number}.",
                     recognized_text=pipeline_result.recognized_text,
                     pipeline_status=status,
+                    mode=self.config.mode,
                 )
 
             conf = pipeline_result.confidence
@@ -319,10 +349,19 @@ class SafetyDecisionEngine:
                         confidence=None,
                         recognized_text=pipeline_result.recognized_text,
                         pipeline_status=status,
+                        mode=self.config.mode,
                     )
-                # Uncalibrated / absent confidence: safe conservative policy (requires confirmation)
+                # Uncalibrated / absent confidence: safe conservative policy (requires confirmation across all modes)
                 requires_confirm = True
-                explanation = f"Candidate integer {parsed_val} parsed successfully (confidence unavailable, confirmation required)."
+                if self.config.mode == OperatingMode.FAST:
+                    explanation = (
+                        f"Candidate integer {parsed_val} parsed successfully "
+                        f"(Fast Mode active, but confidence unavailable; confirmation required)."
+                    )
+                else:
+                    explanation = (
+                        f"Candidate integer {parsed_val} parsed successfully (Safe Mode: confirmation required)."
+                    )
             else:
                 # Calibrated / configured confidence threshold check
                 if self.config.min_confidence is not None and conf < self.config.min_confidence:
@@ -338,14 +377,27 @@ class SafetyDecisionEngine:
                         confidence=conf,
                         recognized_text=pipeline_result.recognized_text,
                         pipeline_status=status,
+                        mode=self.config.mode,
                     )
 
-                if self.config.auto_accept_enabled:
+                if self.config.mode == OperatingMode.FAST and self.config.auto_accept_enabled:
                     requires_confirm = False
-                    explanation = f"Candidate integer {parsed_val} parsed successfully with confidence {conf:.2f}."
+                    explanation = (
+                        f"Candidate integer {parsed_val} parsed successfully with confidence {conf:.2f} "
+                        f"(Fast Mode auto-accepted)."
+                    )
+                elif self.config.mode == OperatingMode.FAST:
+                    requires_confirm = True
+                    explanation = (
+                        f"Candidate integer {parsed_val} parsed successfully with confidence {conf:.2f} "
+                        f"(Fast Mode active; auto-accept gated)."
+                    )
                 else:
                     requires_confirm = True
-                    explanation = f"Candidate integer {parsed_val} parsed successfully (confirm-all policy active)."
+                    explanation = (
+                        f"Candidate integer {parsed_val} parsed successfully with confidence {conf:.2f} "
+                        f"(Safe Mode: confirmation required)."
+                    )
 
             # Policy check: Zero confirmation rule
             if parsed_val == 0 and self.config.zero_requires_confirmation:
@@ -362,6 +414,7 @@ class SafetyDecisionEngine:
                 confidence=conf,
                 recognized_text=pipeline_result.recognized_text,
                 pipeline_status=status,
+                mode=self.config.mode,
             )
 
         # Fallback for any unknown pipeline status
@@ -373,6 +426,7 @@ class SafetyDecisionEngine:
             requires_confirmation=False,
             explanation=f"Unhandled pipeline status: {status}",
             pipeline_status=status,
+            mode=self.config.mode,
         )
 
 

@@ -23,6 +23,7 @@ from voice_calculator.decision import (
     DecisionReason,
     DecisionResult,
     DecisionType,
+    OperatingMode,
     SafetyDecisionEngine,
 )
 from voice_calculator.gui.messages import (
@@ -79,14 +80,61 @@ class VoiceCalculatorApp:
         total_card = tk.Frame(main_frame, bg="#ffffff", bd=1, relief=tk.SOLID, padx=16, pady=12)
         total_card.pack(fill=tk.X, pady=(0, 10))
 
+        # Top header with Title on left and Mode Selector on right
+        total_header_frame = tk.Frame(total_card, bg="#ffffff")
+        total_header_frame.pack(fill=tk.X)
+
         lbl_total_title = tk.Label(
-            total_card,
+            total_header_frame,
             text="TOTAL",
             font=("Segoe UI", 12, "bold"),
             fg="#546e7a",
             bg="#ffffff",
         )
-        lbl_total_title.pack(anchor=tk.W)
+        lbl_total_title.pack(side=tk.LEFT, anchor=tk.W)
+
+        # Mode Selector Frame
+        mode_frame = tk.Frame(total_header_frame, bg="#ffffff")
+        mode_frame.pack(side=tk.RIGHT, anchor=tk.E)
+
+        lbl_mode_title = tk.Label(
+            mode_frame,
+            text="Mode:",
+            font=("Segoe UI", 10, "bold"),
+            fg="#546e7a",
+            bg="#ffffff",
+        )
+        lbl_mode_title.pack(side=tk.LEFT, padx=(0, 6))
+
+        self.mode_var = tk.StringVar(value=self.decision_engine.mode.value)
+
+        self.rb_safe_mode = tk.Radiobutton(
+            mode_frame,
+            text="Safe Mode (Confirm)",
+            value="SAFE",
+            variable=self.mode_var,
+            command=self.on_mode_change,
+            font=("Segoe UI", 10, "bold"),
+            bg="#ffffff",
+            activebackground="#ffffff",
+            fg="#1b5e20",
+            selectcolor="#ffffff",
+        )
+        self.rb_safe_mode.pack(side=tk.LEFT, padx=(0, 6))
+
+        self.rb_fast_mode = tk.Radiobutton(
+            mode_frame,
+            text="Fast Mode (Auto-add)",
+            value="FAST",
+            variable=self.mode_var,
+            command=self.on_mode_change,
+            font=("Segoe UI", 10, "bold"),
+            bg="#ffffff",
+            activebackground="#ffffff",
+            fg="#e65100",
+            selectcolor="#ffffff",
+        )
+        self.rb_fast_mode.pack(side=tk.LEFT)
 
         self.lbl_total_value = tk.Label(
             total_card,
@@ -335,6 +383,23 @@ class VoiceCalculatorApp:
             self.btn_undo.configure(state=tk.DISABLED)
         else:
             self.btn_undo.configure(state=tk.NORMAL)
+
+    def on_mode_change(self) -> None:
+        """Handles Safe / Fast operating mode selection change."""
+        mode_str = self.mode_var.get()
+        try:
+            new_mode = OperatingMode(mode_str)
+        except ValueError:
+            new_mode = OperatingMode.SAFE
+
+        self.decision_engine.set_mode(new_mode)
+        self.controller.set_mode(new_mode)
+        logger.info("Operating mode changed to: %s", new_mode.name)
+
+        if new_mode == OperatingMode.SAFE:
+            self.lbl_feedback.configure(text="Safe Mode active: All recognized numbers require manual confirmation.")
+        else:
+            self.lbl_feedback.configure(text="Fast Mode active: Reliable numbers will be added automatically.")
 
     def on_start(self) -> None:
         """Handles physical Start button click."""

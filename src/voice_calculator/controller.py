@@ -28,7 +28,7 @@ from voice_calculator.asr.vosk_engine import VoskEngine
 from voice_calculator.audio.capture import AudioError, AudioSource, MicrophoneCapture
 from voice_calculator.audio.segmenter import UtteranceSegmenter
 from voice_calculator.audio.vad import EnergyVAD
-from voice_calculator.decision import DecisionResult, SafetyDecisionEngine
+from voice_calculator.decision import DecisionResult, OperatingMode, SafetyDecisionEngine
 from voice_calculator.pipeline import AudioPipeline, PipelineResult, PipelineStatus
 
 logger = logging.getLogger("voice_calculator.controller")
@@ -87,6 +87,15 @@ class ListeningController:
         self._stop_event = threading.Event()
         self._worker_thread: Optional[threading.Thread] = None
         self._active_source: Optional[AudioSource] = None
+
+    @property
+    def mode(self) -> OperatingMode:
+        """Current operating mode of the decision engine (SAFE or FAST)."""
+        return self.decision_engine.mode
+
+    def set_mode(self, mode: OperatingMode) -> None:
+        """Sets operating mode on the decision engine."""
+        self.decision_engine.set_mode(mode)
 
     @property
     def is_listening(self) -> bool:

@@ -213,6 +213,10 @@ class DecisionType(Enum):
     REPEAT = "REPEAT"  # Audio/ASR/confidence uncertainty; user should repeat
     REJECT = "REJECT"  # Definitely not a supported number or invalid structure
 
+class OperatingMode(Enum):
+    SAFE = "SAFE"  # Every accepted candidate requires manual confirmation
+    FAST = "FAST"  # Numbers meeting validated reliability policy may be auto-accepted
+
 class DecisionResult(frozen):
     decision: DecisionType
     value: Optional[int] = None
@@ -222,15 +226,17 @@ class DecisionResult(frozen):
     confidence: Optional[float] = None
     recognized_text: str = ""
     pipeline_status: Optional[PipelineStatus] = None
+    mode: OperatingMode = OperatingMode.SAFE
 ```
 
 ### Invariants:
 1. **No Arithmetic Logic:** The safety layer performs zero calculation, running total tracking, or history manipulation.
 2. **Value Masking:** Non-accepted decisions (`REPEAT`, `REJECT`) **never** carry an integer value (`value is None`), preventing downstream components from accidentally reading or adding invalid data.
-3. **Safe Defaults (Confirm-All):** `auto_accept_enabled = False` by default. Every candidate integer requires manual confirmation until empirical calibration on real speech data proves 0 false additions.
-4. **Zero Confirmation:** Parsed integer `0` always requires confirmation (`requires_confirmation = True`), even if auto-accept is enabled.
-5. **Confidence Handling:** Confidence thresholds are configurable policy boundaries (`min_confidence`, `require_confidence`). Uncalibrated/missing confidence (e.g. Vosk baseline) safely falls back to mandatory user confirmation.
-6. **Error Mapping:** Hardware (`SOURCE_ERROR`), engine (`ASR_ERROR`), silence (`NO_SPEECH`), and buffer issues (`DAMAGED`, `TOO_LONG`) map to `REPEAT`. Linguistic/grammar rejections, command words, and out-of-range inputs map to `REJECT`.
+3. **Safe Defaults (Confirm-All in Safe Mode):** `mode = OperatingMode.SAFE` by default. Every candidate integer requires manual confirmation.
+4. **Fast Mode Confidence Gating:** In Fast Mode (`mode = OperatingMode.FAST`), automatic addition is strictly gated behind calibrated confidence (`conf is not None and conf >= min_confidence` and `auto_accept_enabled = True`). Missing/uncalibrated confidence (e.g. Vosk baseline) safely forces manual confirmation.
+5. **Zero Confirmation:** Parsed integer `0` always requires confirmation (`requires_confirmation = True`), even in Fast Mode with auto-accept enabled.
+6. **Confidence Handling:** Confidence thresholds are configurable policy boundaries (`min_confidence`, `require_confidence`). Uncalibrated/missing confidence safely falls back to mandatory user confirmation.
+7. **Error Mapping:** Hardware (`SOURCE_ERROR`), engine (`ASR_ERROR`), silence (`NO_SPEECH`), and buffer issues (`DAMAGED`, `TOO_LONG`) map to `REPEAT`. Linguistic/grammar rejections, command words, and out-of-range inputs map to `REJECT`.
 
 
 ## 10. Deterministic Calculation Core & History

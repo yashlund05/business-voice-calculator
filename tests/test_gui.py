@@ -23,6 +23,7 @@ from voice_calculator.decision import (
     DecisionReason,
     DecisionResult,
     DecisionType,
+    OperatingMode,
     SafetyDecisionEngine,
 )
 from voice_calculator.gui.app import VoiceCalculatorApp
@@ -398,5 +399,68 @@ class TestVoiceCalculatorGUI:
         # Candidate was NOT set
         assert gui_app.pending_candidate is None
         assert gui_app.calculator.total == 0
+
+    def test_gui_mode_selector_initial_state(self, gui_app: VoiceCalculatorApp):
+        """GUI initializes with Safe Mode selected by default."""
+        assert gui_app.mode_var.get() == "SAFE"
+        assert gui_app.decision_engine.mode == OperatingMode.SAFE
+        assert gui_app.controller.mode == OperatingMode.SAFE
+
+    def test_gui_mode_switching_updates_engine_and_controller(self, gui_app: VoiceCalculatorApp):
+        """Selecting Fast Mode or Safe Mode updates engine and controller operating modes."""
+        # Switch to Fast Mode
+        gui_app.mode_var.set("FAST")
+        gui_app.on_mode_change()
+        assert gui_app.decision_engine.mode == OperatingMode.FAST
+        assert gui_app.controller.mode == OperatingMode.FAST
+        assert "Fast Mode active" in gui_app.lbl_feedback.cget("text")
+
+        # Switch back to Safe Mode
+        gui_app.mode_var.set("SAFE")
+        gui_app.on_mode_change()
+        assert gui_app.decision_engine.mode == OperatingMode.SAFE
+        assert gui_app.controller.mode == OperatingMode.SAFE
+        assert "Safe Mode active" in gui_app.lbl_feedback.cget("text")
+
+    def test_gui_mode_switching_does_not_corrupt_calculator_state(self, gui_app: VoiceCalculatorApp):
+        """Switching modes never modifies running total or history entries."""
+        gui_app.calculator.add(100)
+        gui_app.calculator.add(50)
+        assert gui_app.calculator.total == 150
+        assert gui_app.calculator.count == 2
+
+        # Switch mode multiple times
+        gui_app.mode_var.set("FAST")
+        gui_app.on_mode_change()
+        assert gui_app.calculator.total == 150
+        assert gui_app.calculator.count == 2
+
+        gui_app.mode_var.set("SAFE")
+        gui_app.on_mode_change()
+        assert gui_app.calculator.total == 150
+        assert gui_app.calculator.count == 2
+
+    def test_gui_mode_switching_preserves_pending_candidate(self, gui_app: VoiceCalculatorApp):
+        """Switching modes during pending confirmation preserves the pending candidate for resolution."""
+        cand = DecisionResult(
+            decision=DecisionType.ACCEPT,
+            value=250,
+            reason=DecisionReason.ACCEPTED_CANDIDATE,
+            requires_confirmation=True,
+        )
+        gui_app.process_decision_result(cand)
+        assert gui_app.state == UIState.AWAITING_CONFIRMATION
+        assert gui_app.pending_candidate == cand
+
+        # Switch mode while candidate is pending
+        gui_app.mode_var.set("FAST")
+        gui_app.on_mode_change()
+
+        # Pending candidate remains intact
+        assert gui_app.pending_candidate == cand
+        gui_app.on_confirm_add()
+        assert gui_app.calculator.total == 250
+        assert gui_app.pending_candidate is None
+
 
 

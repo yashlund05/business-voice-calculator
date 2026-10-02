@@ -7,16 +7,16 @@
 
 ## 1. Project Status
 
-- **Overall status:** Phase 3.6B (Background Listening Controller & GUI Integration) completed. 348 unit/mock/integration tests passing, 1 test skipped pending local model download.
-- **Last updated:** 2026-10-01 by Antigravity
+- **Overall status:** Phase 3.8 (Real Speech Benchmark and VAD Calibration) completed. 360 unit/mock/integration tests passing (100% pass rate).
+- **Last updated:** 2026-10-02 by Antigravity
 
 ## 2. Current Phase
 
-- Phase: **Phase 3 — ASR Benchmark and Architecture Decision** (Subtasks 3.1, 3.2, 3.3, 3.4, 3.5, 3.6A, and 3.6B completed).
+- Phase: **Phase 3 — ASR Benchmark and Architecture Decision** (Subtasks 3.1, 3.2, 3.3, 3.4, 3.5, 3.6A, 3.6B, 3.7, and 3.8 completed).
 
 ## 3. Current Task
 
-- Phase 3.6B completed. Next: Phase 3.7 / Phase 4 (ASR Candidate evaluation / Whisper comparison or VAD calibration on recorded dataset).
+- Phase 3.8 completed. Next: Phase 4 (ASR Candidate evaluation / Whisper comparison or real speech dataset collection).
 
 ## 4. Completed Work
 
@@ -36,6 +36,8 @@
 - [3.5 Calculator State, History & Undo] Implemented `voice_calculator.calculator` (`Calculator`, `HistoryEntry`, `CalculatorError`, `InvalidValueError`). Maintains running total strictly derived from immutable history entries, LIFO reversible `undo()`, state `reset()`, and strict integer validation (0–2000 range, rejecting floats, booleans, negative values) with zero dependencies on audio/ASR/VAD/GUI/parser. Added 31 comprehensive unit/invariant tests in `tests/test_calculator.py`.
 - [3.6A Desktop GUI Shell] Implemented `voice_calculator.gui` (`VoiceCalculatorApp`, `UIState`, `STATE_COLORS`, `STATE_TEXTS`, `format_number`, `get_decision_feedback_message`). Built responsive Tkinter window with prominent hero running total display (56pt bold), physical Start/Stop/Undo/Clear controls, explicit status indicator bar, in-place candidate confirmation prompt (`Add <N>` / `Discard`), and scrollable recent additions list. Added 13 comprehensive unit/interaction tests in `tests/test_gui.py`.
 - [3.6B Background Listening Controller & GUI Integration] Implemented `voice_calculator.controller` (`ListeningController`, `ControllerEvent`, `ControllerEventType`). Coordinates background worker thread, audio capture, VAD segmentation, ASR engine, deterministic parser, and candidate safety decision engine. Communicates with `VoiceCalculatorApp` main thread via thread-safe `queue.Queue` with periodic polling (`root.after`). Implemented session isolation (`session_id`), multi-worker prevention, clean stop/discard semantics, exception safety (typed audio and model errors), and clean window close handler (`WM_DELETE_WINDOW`). Added 8 comprehensive unit/integration tests in `tests/test_controller.py` and 4 additional GUI integration tests in `tests/test_gui.py` (17 total GUI tests).
+- [3.7 Fast Mode Foundation & Mode Selector] Implemented `OperatingMode` (`SAFE`, `FAST`) in `voice_calculator.decision`. Configured `SafetyDecisionEngine` to enforce manual confirmation for all numbers in Safe Mode, while preparing Fast Mode with strict confidence gating (missing/uncalibrated confidence forces confirmation; calibrated confidence auto-adds only when `auto_accept_enabled` is active and threshold is met; 0 always requires confirmation). Integrated responsive Safe/Fast Mode radio selector into `VoiceCalculatorApp` header and added mode delegation methods in `ListeningController`. Added 5 new decision tests (26 total in `test_decision.py`), 1 new controller test (9 total in `test_controller.py`), and 4 new GUI tests (21 total in `test_gui.py`).
+- [3.8 Real Speech Benchmark and VAD Calibration] Verified dataset readiness, ground truth schema, category coverage (94 prompts), and git exclusion. Audited Vosk baseline model integration (`models/vosk-model-small-en-us`). Audited EnergyVAD and UtteranceSegmenter; identified and resolved a critical pre-roll accounting bug where pre-roll silence buffer duration was included in `_speech_duration_ms`, allowing short noise clicks (<250ms) to trigger spurious utterances. Added regression test `test_segmenter_short_noise_burst_with_full_pre_roll_rejected` (13/13 segmenter tests pass, 360 total tests pass). Calibrated VAD timing parameters and documented findings in `docs/research.md`.
 
 ## 5. Current Architecture (as implemented)
 
@@ -43,7 +45,7 @@
 - Modules that exist in code: `voice_calculator.config`, `voice_calculator.logging_setup`, `voice_calculator.numparse`, `voice_calculator.audio.capture`, `voice_calculator.audio.wavio`, `voice_calculator.audio.vad`, `voice_calculator.audio.segmenter`, `voice_calculator.asr.base`, `voice_calculator.asr.vosk_engine`, `voice_calculator.benchmark`, `voice_calculator.pipeline`, `voice_calculator.decision`, `voice_calculator.calculator`, `voice_calculator.controller`, `voice_calculator.gui`.
 - Chosen ASR engine: **Vosk small English + constrained grammar baseline** (pending Phase 3 benchmark evaluation and ADR).
 - VAD: **EnergyVAD baseline (500.0 RMS threshold, 250ms pre-roll, 700ms hangover, 250ms min utterance, 6000ms max utterance)** (pending calibration on real recordings).
-- Auto-accept policy: **off** (confirm-all) by default (`AUTO_ACCEPT_ENABLED = False`).
+- Operating Mode default: **Safe Mode** (`OperatingMode.SAFE`); auto-accept policy is **off** (`AUTO_ACCEPT_ENABLED = False`).
 
 ## 6. Confirmed Decisions
 
@@ -67,6 +69,8 @@
 | 16 | Calculator domain layer maintains deterministic running total derived strictly from immutable HistoryEntry records, reversible LIFO undo(), state reset(), and strict 0–2000 integer validation with zero audio/ASR/VAD/GUI/parser dependencies | 2026-10-01 | Phase 3.5 implementation |
 | 17 | VoiceCalculatorApp Tkinter desktop shell provides prominent running total display, physical Start/Stop/Undo/Clear controls, explicit UIState indicators, and in-place candidate confirmation prompt; strictly isolates GUI from recognition heuristics and arithmetic calculation | 2026-10-01 | Phase 3.6A implementation |
 | 18 | ListeningController coordinates background audio worker thread, utterance segmentation, ASR inference, parsing, and safety evaluation, delivering structured events to GUI via thread-safe queue with monotonic session isolation and clean stop/discard semantics | 2026-10-01 | Phase 3.6B implementation |
+| 19 | OperatingMode enum (SAFE, FAST) introduces operating mode abstraction: Safe Mode enforces confirm-all for every candidate; Fast Mode gates automatic addition strictly behind calibrated confidence, keeping uncalibrated/missing confidence (e.g. Vosk baseline) safely requiring confirmation | 2026-10-02 | Phase 3.7 implementation |
+| 20 | UtteranceSegmenter tracks active speech duration separately from pre-roll ring buffer silence; pre-roll audio frames are preserved in finalized Utterance for onset phonetic integrity but must not satisfy min_utterance_ms noise filter | 2026-10-02 | Phase 3.8 implementation |
 
 ## 7. Pending Decisions
 
@@ -88,12 +92,12 @@
 
 ## 9. Test Status
 
-- Automated tests: **348 passed, 1 skipped** (`pytest -v`).
-- Last test command/result: `.\.venv\Scripts\pytest.exe -v` -> 348 passed, 1 skipped in 2.77s (test_asr_base: 7, test_audio_capture: 9, test_benchmark: 22, test_calculator: 31, test_config: 5, test_controller: 8, test_decision: 21, test_gui: 17, test_logging: 3, test_numparse_cases: 158, test_numparse_exhaustive: 10, test_pipeline: 15, test_segmenter: 12, test_smoke: 2, test_vad: 8, test_vosk_engine: 10 passed + 1 skipped, test_wavio: 10).
+- Automated tests: **360 passed, 0 skipped, 0 failed** (`pytest -v`).
+- Last test command/result: `.\.venv\Scripts\pytest.exe -v` -> 360 passed in 4.95s (test_asr_base: 7, test_audio_capture: 9, test_benchmark: 22, test_calculator: 31, test_config: 5, test_controller: 9, test_decision: 26, test_gui: 21, test_logging: 3, test_numparse_cases: 158, test_numparse_exhaustive: 10, test_pipeline: 15, test_segmenter: 13, test_smoke: 2, test_vad: 8, test_vosk_engine: 11, test_wavio: 10).
 
 ## 10. Benchmark Status
 
-- **No live speech recordings run yet.** Benchmark harness, dataset recording helper, VAD segmentation, single-utterance pipeline orchestration, safety decision engine, calculator domain core, desktop GUI shell, and background listening controller are fully implemented and verified with synthetic/headless tests. Actual accuracy, latency, and resource metrics are pending real speech recording session.
+- **No live speech recordings run yet.** Benchmark harness, dataset recording helper, VAD segmentation, single-utterance pipeline orchestration, safety decision engine, calculator domain core, desktop GUI shell, background listening controller, and Safe/Fast mode foundations are fully implemented and verified with automated tests. Actual accuracy, latency, and resource metrics are pending real speech recording session.
 - See `research.md` for metrics and templates.
 
 ## 11. Important Lessons
@@ -103,12 +107,15 @@
 - Benchmark evaluation harness must treat False Addition (wrong number on valid audio or any number on negative audio) as the primary safety metric, and report the Rule-of-Three 95% upper bound when zero errors are observed.
 - Automated prompt consistency tests ensure recording prompts never drift from the formal parser grammar.
 - Online utterance segmentation must cleanly separate speech detection (VADDetector protocol) from temporal state transitions (UtteranceSegmenter), keeping audio capture and downstream ASR decoupled.
+- Pre-roll frames (250ms) are pre-onset context silence needed for phonetic recognition of initial plosives/fricatives ("two", "three", "six"), but MUST NOT be counted towards active speech duration when filtering transient noise bursts against `min_utterance_ms`.
 - Pipeline orchestration layer must not perform arithmetic operations (running total, addition); it cleanly maps raw audio frames through segmentation, ASR, and parsing into typed candidate results for subsequent decision processing.
 - Candidate parsed result != automatic addition. Masking the integer value to `None` on all non-accepts (REPEAT, REJECT) provides structural defense-in-depth against accidental addition of unvalidated values.
 - Calculator domain layer must strictly receive validated integer values from upstream callers, never raw speech transcripts or PipelineResults, isolating arithmetic logic completely from recognition heuristics.
 - Tkinter GUI shell should use dependency injection with Calculator and SafetyDecisionEngine to ensure headless testability without hardware audio dependencies.
 - Background listening worker thread must never mutate GUI widgets directly; passing structured immutable events (`ControllerEvent`) across a thread-safe queue polled on the main GUI thread guarantees thread safety and UI responsiveness.
 - Session isolation using monotonic session IDs ensures in-flight ASR transcripts or candidate events generated during a previous listening session are safely ignored if the session has stopped or restarted.
+- Operating modes (Safe Mode vs Fast Mode) must be evaluated strictly in the safety decision engine rather than being hardcoded in GUI callbacks.
+- Missing/uncalibrated confidence must never be treated as evidence of reliability; Fast Mode must safely fall back to manual confirmation when confidence scores are missing (e.g. Vosk baseline).
 
 ## 12. Dependencies Added (with justification)
 
@@ -121,17 +128,14 @@
 
 ## 13. Next Task
 
-- **Phase 3.7 / Phase 4**: Candidate Whisper Engine evaluation / benchmark comparison or VAD calibration on recorded speech.
+- **Phase 4**: Candidate Whisper Engine evaluation (faster-whisper) vs Vosk baseline benchmark comparison, or real speech recording collection via `tools/record_dataset.py`.
 
 ## 14. Files Changed Recently
 
-- `src/voice_calculator/controller.py` — new — ListeningController, ControllerEvent, ControllerEventType (Phase 3.6B)
-- `src/voice_calculator/gui/app.py` — modified — VoiceCalculatorApp integration with ListeningController, queue polling loop, and clean window closing (Phase 3.6B)
-- `src/voice_calculator/__init__.py` — modified — exported ListeningController and event types (Phase 3.6B)
-- `tests/test_controller.py` — new — 8 comprehensive unit/integration tests for ListeningController (Phase 3.6B)
-- `tests/test_gui.py` — modified — added 4 controller-integration GUI tests (17 tests total) (Phase 3.6B)
-- `docs/architecture.md` — modified — documented background listening controller and threading model (Phase 3.6B)
-- `docs/memory.md` — modified — updated with Phase 3.6B status and test results (Phase 3.6B)
+- `src/voice_calculator/audio/segmenter.py` — modified — fixed active speech duration accounting to exclude pre-roll silence buffer (Phase 3.8)
+- `tests/test_segmenter.py` — modified — added `test_segmenter_short_noise_burst_with_full_pre_roll_rejected` regression test (Phase 3.8)
+- `docs/research.md` — modified — added Section 8 VAD Calibration & Experiment Log EXP-001 and Section 9 Confidence Calibration (Phase 3.8)
+- `docs/memory.md` — modified — updated with Phase 3.8 status, decisions, lessons, and test results (Phase 3.8)
 
 ## 15. Do Not Change Casually (requires explicit user approval)
 

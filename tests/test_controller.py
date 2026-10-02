@@ -292,3 +292,17 @@ class TestListeningController:
         assert not hasattr(controller, "running_total")
         assert not hasattr(controller, "add")
         assert not hasattr(controller, "undo")
+
+    def test_controller_mode_delegation(self):
+        """Verify controller.mode and controller.set_mode properly delegate to decision engine."""
+        from voice_calculator.decision import OperatingMode
+        controller = ListeningController(engine=FakeEngine())
+        assert controller.mode == OperatingMode.SAFE
+
+        controller.set_mode(OperatingMode.FAST)
+        assert controller.mode == OperatingMode.FAST
+        assert controller.decision_engine.mode == OperatingMode.FAST
+
+        controller.set_mode(OperatingMode.SAFE)
+        assert controller.mode == OperatingMode.SAFE
+        assert controller.decision_engine.mode == OperatingMode.SAFE

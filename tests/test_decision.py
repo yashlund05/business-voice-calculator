@@ -20,6 +20,7 @@ from voice_calculator.decision import (
     DecisionReason,
     DecisionResult,
     DecisionType,
+    OperatingMode,
     SafetyDecisionEngine,
     evaluate_candidate,
 )
@@ -76,9 +77,27 @@ class TestSafetyDecisionEngine:
         assert result.confidence is None
         assert result.recognized_text == "forty two"
 
-    def test_valid_candidate_with_auto_accept_enabled(self):
-        """When auto_accept_enabled is True and confidence is unconstrained, candidate does not require confirmation."""
-        config = DecisionConfig(auto_accept_enabled=True, zero_requires_confirmation=True)
+    def test_safe_mode_strictly_requires_confirmation_even_with_high_confidence(self):
+        """In Safe Mode, every valid candidate requires confirmation even with high confidence and auto_accept_enabled=True."""
+        config = DecisionConfig(mode=OperatingMode.SAFE, auto_accept_enabled=True, zero_requires_confirmation=True)
+        engine = SafetyDecisionEngine(config=config)
+        pipe_res = make_pipeline_result(
+            status=PipelineStatus.PARSED,
+            text="one hundred fifty",
+            confidence=0.99,
+        )
+
+        result = engine.evaluate(pipe_res)
+
+        assert result.decision == DecisionType.ACCEPT
+        assert result.value == 150
+        assert result.requires_confirmation is True
+        assert result.can_auto_add is False
+        assert result.mode == OperatingMode.SAFE
+
+    def test_fast_mode_with_auto_accept_enabled_and_confidence(self):
+        """In Fast Mode with auto_accept_enabled and calibrated confidence, candidate can auto-add."""
+        config = DecisionConfig(mode=OperatingMode.FAST, auto_accept_enabled=True, zero_requires_confirmation=True)
         engine = SafetyDecisionEngine(config=config)
         pipe_res = make_pipeline_result(
             status=PipelineStatus.PARSED,
@@ -93,10 +112,47 @@ class TestSafetyDecisionEngine:
         assert result.requires_confirmation is False
         assert result.can_auto_add is True
         assert result.confidence == 0.95
+        assert result.mode == OperatingMode.FAST
+
+    def test_fast_mode_with_missing_confidence_requires_confirmation(self):
+        """In Fast Mode, missing/uncalibrated confidence (e.g. Vosk baseline) MUST require confirmation."""
+        config = DecisionConfig(mode=OperatingMode.FAST, auto_accept_enabled=True)
+        engine = SafetyDecisionEngine(config=config)
+        pipe_res = make_pipeline_result(
+            status=PipelineStatus.PARSED,
+            text="forty two",
+            confidence=None,
+        )
+
+        result = engine.evaluate(pipe_res)
+
+        assert result.decision == DecisionType.ACCEPT
+        assert result.value == 42
+        assert result.requires_confirmation is True
+        assert result.can_auto_add is False
+        assert "confidence unavailable" in result.explanation
+
+    def test_fast_mode_with_auto_accept_disabled_requires_confirmation(self):
+        """In Fast Mode with auto_accept_enabled=False (gated), candidate requires confirmation."""
+        config = DecisionConfig(mode=OperatingMode.FAST, auto_accept_enabled=False)
+        engine = SafetyDecisionEngine(config=config)
+        pipe_res = make_pipeline_result(
+            status=PipelineStatus.PARSED,
+            text="fifty",
+            confidence=0.95,
+        )
+
+        result = engine.evaluate(pipe_res)
+
+        assert result.decision == DecisionType.ACCEPT
+        assert result.value == 50
+        assert result.requires_confirmation is True
+        assert result.can_auto_add is False
+        assert "auto-accept gated" in result.explanation
 
     def test_zero_requires_confirmation_even_when_auto_accept_enabled(self):
-        """Zero must require confirmation even when auto_accept_enabled is True (AC-3 / Architecture §9)."""
-        config = DecisionConfig(auto_accept_enabled=True, zero_requires_confirmation=True)
+        """Zero must require confirmation even when auto_accept_enabled is True in Fast Mode (AC-3 / Architecture §9)."""
+        config = DecisionConfig(mode=OperatingMode.FAST, auto_accept_enabled=True, zero_requires_confirmation=True)
         engine = SafetyDecisionEngine(config=config)
         pipe_res = make_pipeline_result(
             status=PipelineStatus.PARSED,
@@ -373,3 +429,50 @@ class TestSafetyDecisionEngine:
         assert not hasattr(engine, "history")
         assert not hasattr(res1, "total")
         assert not hasattr(res2, "total")
+
+    def test_engine_dynamic_mode_switching(self):
+        """Verify that set_mode dynamically updates operating mode without recreating engine."""
+        config = DecisionConfig(mode=OperatingMode.SAFE, auto_accept_enabled=True)
+        engine = SafetyDecisionEngine(config=config)
+        assert engine.mode == OperatingMode.SAFE
+
+        pipe_res = make_pipeline_result(PipelineStatus.PARSED, text="one hundred", confidence=0.95)
+
+        # In Safe Mode -> requires confirmation
+        res_safe = engine.evaluate(pipe_res)
+        assert res_safe.requires_confirmation is True
+        assert res_safe.mode == OperatingMode.SAFE
+
+        # Switch to Fast Mode -> auto accepts
+        engine.set_mode(OperatingMode.FAST)
+        assert engine.mode == OperatingMode.FAST
+
+        res_fast = engine.evaluate(pipe_res)
+        assert res_fast.requires_confirmation is False
+        assert res_fast.mode == OperatingMode.FAST
+
+        # Switch back to Safe Mode -> requires confirmation again
+        engine.set_mode(OperatingMode.SAFE)
+        assert engine.mode == OperatingMode.SAFE
+        res_safe_again = engine.evaluate(pipe_res)
+        assert res_safe_again.requires_confirmation is True
+
+    def test_fast_mode_preserves_rejection_of_invalid_and_out_of_range(self):
+        """Fast Mode must never accept invalid, out of range, or command words."""
+        config = DecisionConfig(mode=OperatingMode.FAST, auto_accept_enabled=True)
+        engine = SafetyDecisionEngine(config=config)
+
+        # Malformed
+        res_malformed = engine.evaluate(make_pipeline_result(PipelineStatus.PARSER_REJECTED, text="hundred fifty", confidence=0.99))
+        assert res_malformed.decision == DecisionType.REJECT
+        assert res_malformed.value is None
+
+        # Command word
+        res_cmd = engine.evaluate(make_pipeline_result(PipelineStatus.PARSER_REJECTED, text="undo", confidence=0.99))
+        assert res_cmd.decision == DecisionType.REJECT
+        assert res_cmd.value is None
+
+        # Out of range
+        res_range = engine.evaluate(make_pipeline_result(PipelineStatus.PARSER_REJECTED, text="five thousand", confidence=0.99))
+        assert res_range.decision == DecisionType.REJECT
+        assert res_range.value is None

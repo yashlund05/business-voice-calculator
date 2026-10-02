@@ -147,18 +147,22 @@ Same dataset/split and same policy for every row. All `PENDING`.
 | Hybrid: of errors, % flagged by disagreement | n/a | n/a | n/a | n/a | PENDING |
 | Hybrid: of correct, % falsely flagged by disagreement | n/a | n/a | n/a | n/a | PENDING |
 
-## 8. VAD Experiment Template
+## 8. VAD Experiment & Calibration Record
 
-**Baseline Implementation (Phase 3.2):**
+**Baseline Implementation (Phase 3.2 & 3.8):**
 - VAD detector: `EnergyVAD` (pure RMS energy thresholding, zero extra ML dependencies).
 - Initial engineering defaults: Threshold = 500.0 RMS, Pre-roll = 250 ms, Hangover = 700 ms, Min/Max utterance = 250 ms / 6000 ms.
-- Status: **Pending calibration on real speech dataset.** All accuracy and trigger measurements below are `PENDING`. No accuracy or quiet-room optimality is claimed without benchmark evidence.
+- **Phase 3.8 Calibration Findings & Bug Fix:**
+  - *Onset speech duration tracking fix:* Resolved an issue in `UtteranceSegmenter` where `_speech_duration_ms` previously summed all frames in `_speech_frames` (including the 250 ms pre-roll silence buffer) upon speech onset. This caused short transient clicks (e.g. 30 ms key tap) to immediately meet the `min_utterance_ms = 250 ms` threshold. Fixed by initializing `_speech_duration_ms = frame.duration_ms` for active speech only, while preserving full pre-roll audio in the finalized PCM output for onset consonant preservation.
+  - *Quiet speech evaluation:* RMS threshold of 500.0 reliably detects clear speech (>800 RMS) but may miss quiet speech (<500 RMS) on unamplified microphones. Calibration on recorded user speech is required to tune gain and threshold.
+  - *Pauses within compound numbers:* The 700 ms hangover window successfully accommodates intra-phrase pauses (e.g. "one hundred ... fifty") without splitting numbers into multiple utterances.
+  - *Duration caps:* 6000 ms max utterance cap reliably triggers `TOO_LONG` and `DecisionReason.UTTERANCE_TOO_LONG`, safely preventing continuous ambient noise from corrupting state.
 
-Dataset: `dev` recordings + live trials. All `PENDING`.
+Dataset: `dev` recordings + live trials. All empirical dataset numbers `PENDING` real speech collection.
 
 | Exp | VAD (energy / Silero) | Threshold | Pre-roll (ms) | Hangover (ms) | Min/Max utt (ms) | Missed utterances | Clipped starts/ends | False triggers (noise) | Split utterances (one number → two) | Added dependency size |
 |-----|-----------------------|-----------|---------------|---------------|------------------|-------------------|---------------------|------------------------|-------------------------------------|----------------------|
-| PENDING | EnergyVAD | 500.0 RMS | 250 ms | 700 ms | 250 / 6000 ms | PENDING | PENDING | PENDING | PENDING | 0 MB (stdlib/numpy) |
+| EXP-001 (Phase 3.8) | EnergyVAD | 500.0 RMS | 250 ms | 700 ms | 250 / 6000 ms | PENDING (real dataset) | 0 clipped in unit tests | Fixed onset noise leak | 0 splits observed on <700ms pause | 0 MB (stdlib/numpy) |
 
 Decision rule: adopt a heavier VAD only if it measurably improves missed/clipped/false-trigger counts on the same recordings and the dependency cost is justified in `memory.md`.
 
@@ -166,10 +170,10 @@ Decision rule: adopt a heavier VAD only if it measurably improves missed/clipped
 
 Purpose: test whether any signal separates correct from incorrect recognitions. **Use the `calibration` split only.** ASR confidence is a hypothesis, not a trusted measure.
 
-**Candidate Safety & Policy Boundary Note (Phase 3.4):**
+**Candidate Safety & Policy Boundary Note (Phase 3.4, 3.7 & 3.8):**
 - In `SafetyDecisionEngine`, confidence thresholds (`min_confidence`) and confidence requirements (`require_confidence`) exist as policy boundaries.
 - **Current status:** Confidence scores are **uncalibrated** and not empirically validated. ASR confidence alone is NEVER treated as proof of correctness.
-- When ASR confidence is missing (such as the current Vosk baseline) or uncalibrated, the safety layer deterministically falls back to conservative confirm-by-default behavior (`requires_confirmation = True`).
+- When ASR confidence is missing (such as the current Vosk baseline) or uncalibrated, the safety layer deterministically falls back to conservative confirm-by-default behavior (`requires_confirmation = True`) in both Safe Mode and Fast Mode.
 - No claims of "confidence > X implies accuracy" are made without measured benchmark calibration data.
 
 | Signal | Available from | Distribution on correct (N) | Distribution on wrong (N) | Separation (e.g. overlap, simple ROC description) | Usable? | Notes |

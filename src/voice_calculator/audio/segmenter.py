@@ -154,10 +154,11 @@ class UtteranceSegmenter:
                 self._speech_frames = list(self._pre_roll_buffer)
                 self._pre_roll_buffer.clear()
                 self._speech_frames.append(frame)
-                self._speech_duration_ms = sum(f.duration_ms for f in self._speech_frames)
+                self._speech_duration_ms = frame.duration_ms
 
                 # Check max duration cap
-                if self._speech_duration_ms >= self.max_utterance_ms:
+                total_duration = sum(f.duration_ms for f in self._speech_frames)
+                if total_duration >= self.max_utterance_ms:
                     return self._finalize_utterance(is_too_long=True)
                 return None
             else:
@@ -172,7 +173,8 @@ class UtteranceSegmenter:
                 self._speech_duration_ms += frame.duration_ms
 
                 # Check max duration cap
-                if self._speech_duration_ms >= self.max_utterance_ms:
+                total_duration = sum(f.duration_ms for f in self._speech_frames)
+                if total_duration >= self.max_utterance_ms:
                     return self._finalize_utterance(is_too_long=True)
                 return None
             else:
@@ -191,11 +193,12 @@ class UtteranceSegmenter:
                 self._state = SegmenterState.SPEECH_ACTIVE
                 self._speech_frames.extend(self._hangover_frames)
                 self._speech_frames.append(frame)
-                self._speech_duration_ms += self._hangover_duration_ms + frame.duration_ms
+                self._speech_duration_ms += frame.duration_ms
                 self._hangover_frames.clear()
                 self._hangover_duration_ms = 0.0
 
-                if self._speech_duration_ms >= self.max_utterance_ms:
+                total_duration = sum(f.duration_ms for f in self._speech_frames)
+                if total_duration >= self.max_utterance_ms:
                     return self._finalize_utterance(is_too_long=True)
                 return None
             else:
