@@ -2,7 +2,7 @@
 
 > Doc role: **ORDER** of implementation. Requirements: `prd.md`. Design: `architecture.md`, `design.md`. Rules: `rules.md`. Track progress in `memory.md`; record experiments in `research.md`.
 > Validation-first: the parser and the ASR evidence come **before** the audio loop and the GUI.
-> Each phase is split into subtasks (e.g. `1.2`). **Give the coding agent ONE subtask per prompt.** Do not hand it a whole phase.
+> Each phase is split into subtasks (e.g. `5A`). **Give the coding agent ONE subtask per prompt.** Do not hand it a whole phase.
 
 ---
 
@@ -16,7 +16,7 @@
 
 ### Prompt Template (copy, fill the brackets)
 
-```
+```text
 Follow docs/rules.md. Read docs/memory.md first.
 Task: Phase [N], subtask [N.M] in docs/phases.md — "[title]".
 Read only: [prd.md §X] [architecture.md §Y] [design.md §Z if UI].
@@ -28,190 +28,110 @@ Stop after this subtask and reply with the Task Report from rules.md §H.
 
 Debug variant: `Follow docs/rules.md. Bug: [symptom + steps]. Write a failing regression test first, then fix with the smallest change, run tests, update memory.md, commit, report.`
 
-### Phase Overview and Dependencies
+---
 
-| Phase | Name | Depends on | Needs user input? |
-|-------|------|-----------|-------------------|
-| 0 | Repository and environment foundation | — | confirm Python version |
-| 1 | Strict deterministic number parser | 0 | no |
-| 2 | ASR interface and prerecorded-audio baseline | 0, 1 | **record dataset (manual)** |
-| 3 | ASR benchmark and architecture decision | 1, 2 | **review ADR + ratify provisional targets** |
-| 4 | Microphone capture and continuous listening | 0, 3 (engine choice) | mic available |
-| 5 | Validation and decision engine | 1, 3, 4 | no |
-| 6 | Calculation core, history, undo, reset | 0 (logic is independent) | no |
-| 7 | GUI integration | 4, 5, 6 | UI review |
-| 8 | Reliability testing and Windows packaging | 7 | **real-use trial** |
+### Phase Overview and Status
+
+| Phase | Name | Scope / Summary | Status |
+|---|---|---|---|
+| **0** | Repository & Environment Foundation | Project layout, config constants, privacy-safe logging, testing harness | **COMPLETED** |
+| **1** | Strict Deterministic Number Parser | 0–2000 formal grammar, normalization, reason codes, exhaustive/fuzz tests | **COMPLETED** |
+| **2** | ASR Interface & Prerecorded Audio Baseline | ASREngine protocol, WAV I/O, Vosk baseline, benchmark CLI, transcribe tool | **COMPLETED** |
+| **3** | Full Desktop Architecture Foundation | EnergyVAD, segmenter, pipeline orchestrator, safety decision engine, calculator core, Tkinter GUI, controller, Safe/Fast modes | **COMPLETED** |
+| **4** | Candidate ASR Evaluation & Real Phone Benchmark | 4A FasterWhisperEngine, 4B low-end CPU benchmark on Dad dataset, 4C natural parser expansion + re-benchmark, 4D safety audit, 4E cancelled | **COMPLETED** |
+| **5** | Validation, Error Audit & Safety Calibration | 5A error audit & synthetic stress, 5B confirmation/recovery reliability, 5C ASR ADR (P2), 5D VAD (P3) + auto-accept (P4), 5E multi-number (P7) + zero rule (P8) | **IN PROGRESS** |
+| **6** | Reliability Testing, Packaging & Trial | Long-session soak, error matrix, PyInstaller one-folder packaging (P9), real-world trial | **PLANNED** |
 
 ---
 
-## Phase 0 — Repository and Environment Foundation
+## Phase 0 — Repository and Environment Foundation (COMPLETED)
 
-**Objective:** a clean, reproducible repo where tests run.
-**Prerequisites:** Python 3.11+ and Git installed on Windows.
-**Dependencies on previous phases:** none.
+**Objective:** Clean, reproducible repository where tests run and offline development standards are enforced.
 
-| Subtask | Tasks | Files |
-|---------|-------|-------|
-| 0.1 Skeleton | Create the layout of `architecture.md` §4 with empty packages only; `.gitignore` (venv, `models/`, `data/`, `logs/`, `__pycache__`, `build/`, `dist/`, `*.wav` outside approved fixtures); `requirements.txt` (pytest only); `README.md` (setup + run tests, 10 lines); `pytest` config | `src/voice_calculator/__init__.py`, `tests/`, `.gitignore`, `requirements.txt`, `README.md` |
-| 0.2 Config & logging | `config.py` with named constants (initially: sample rate, min/max value, queue size, poll interval); `logging_setup.py` privacy-safe defaults (`architecture.md` §13); 1–2 tests | `config.py`, `logging_setup.py`, `tests/test_config.py` |
-
-**Tests:** `pytest` runs and passes (trivial tests OK). Verify `.gitignore` excludes `models/`, `data/`, `logs/`.
-**Acceptance criteria:** fresh clone + venv + `pip install -r requirements.txt` + `pytest` passes; no model/data/log files tracked.
-**Exit criteria / Stopping point:** first commit(s) made; `memory.md` updated (Python version recorded). **Stop.**
+| Subtask | Tasks | Files | Status |
+|---|---|---|---|
+| 0.1 Skeleton | Directory layout, `.gitignore` (venv, models, data, logs), `requirements.txt`, `README.md`, pytest config | `src/voice_calculator/__init__.py`, `tests/`, `.gitignore` | **DONE** |
+| 0.2 Config & logging | `config.py` constants, `logging_setup.py` privacy-safe rotating file logging, initial unit tests | `config.py`, `logging_setup.py`, `tests/test_config.py` | **DONE** |
 
 ---
 
-## Phase 1 — Strict Deterministic Number Parser
+## Phase 1 — Strict Deterministic Number Parser (COMPLETED)
 
-**Objective:** a pure `parse(text)` that accepts exactly the forms in `prd.md` §7 and rejects everything else with reason codes.
-**Prerequisites:** Phase 0 done.
-**Dependencies:** Phase 0.
-**Read:** `prd.md` §7–8, `architecture.md` §8.
+**Objective:** Pure deterministic `parse(text)` for 0–2000 with explicit rejection reason codes and zero ML/LLM dependencies.
 
-| Subtask | Tasks | Files |
-|---------|-------|-------|
-| 1.1 Test corpus first | Write tests from `prd.md` §7: accepted table, rejected table with expected reason codes, edge cases (hyphens, case, extra spaces, digit strings). Tests initially fail. | `tests/test_numparse_cases.py` |
-| 1.2 Implementation | Implement normalization, closed vocabulary, grammar, range check, `ParseResult` + reason codes. Make 1.1 pass. | `numparse.py` |
-| 1.3 Exhaustive & fuzz | Round-trip generator for all 0–2000 canonical word forms (generator lives in tests); fuzz test: random token sequences never yield a value unless they match the grammar; document any grammar gaps found (do not silently widen the grammar). | `tests/test_numparse_exhaustive.py` |
-
-**Tests:** all three files pass.
-**Acceptance criteria:** `prd.md` AC-1 met; parser never raises on arbitrary strings; no ML/LLM/network.
-**Exit criteria:** tests pass; any ambiguity found is logged in `memory.md` "Pending decisions"; commit; **Stop.** (Phase Gate: user skims the accepted/rejected lists.)
+| Subtask | Tasks | Files | Status |
+|---|---|---|---|
+| 1.1 Test corpus | Acceptance and rejection test suites from formal grammar specification | `tests/test_numparse_cases.py` | **DONE** |
+| 1.2 Implementation | Text normalization, closed vocabulary, grammar parsing, range enforcement, `ParseResult` dataclass | `src/voice_calculator/numparse.py` | **DONE** |
+| 1.3 Exhaustive & fuzz | 0–2000 canonical words round-trip generator, digit string verification, randomized token fuzzing | `tests/test_numparse_exhaustive.py` | **DONE** |
 
 ---
 
-## Phase 2 — ASR Interface and Prerecorded-Audio Baseline
+## Phase 2 — ASR Interface and Prerecorded-Audio Baseline (COMPLETED)
 
-**Objective:** run a baseline ASR over WAV files and print parsed results, without a microphone.
-**Prerequisites:** Phase 1 done. Vosk small English model placed manually in `models/` (never committed).
-**Dependencies:** Phases 0–1.
-**Read:** `architecture.md` §7, `research.md` (dataset protocol).
+**Objective:** Offline baseline ASR execution over 16 kHz mono WAV files with deterministic outcome classification.
 
-| Subtask | Tasks | Files |
-|---------|-------|-------|
-| 2.1 Interface + WAV I/O | `ASREngine` protocol, `ASRResult`, a `FakeEngine` (returns scripted text) for tests; WAV read/write helpers (16 kHz mono int16) | `asr/base.py`, `audio/wavio.py`, tests |
-| 2.2 Vosk baseline | `VoskEngine` with constrained number-word grammar; local model path from config; no auto-download; clear `ModelMissing` error; test with fake/skip marker when model absent | `asr/vosk_engine.py`, tests |
-| 2.3 Dataset recording helper | `tools/record_dataset.py`: prompts the user with target numbers from a generated list, records one WAV per prompt to `data/recordings/`, writes `labels.csv`; includes a visible "recording" notice. **User then records the dataset following `research.md` protocol (manual).** | `tools/record_dataset.py` |
-| 2.4 Transcribe CLI | `tools/transcribe.py <wav-or-dir>` → prints text, parsed value/rejection, elapsed ms per file | `tools/transcribe.py` |
-
-**Tests:** unit tests with `FakeEngine`; ASR-dependent tests are skipped (not failed) when the model is missing.
-**Acceptance criteria:** CLI processes a folder of WAVs offline and shows text + parse result + timing; no network use.
-**Exit criteria:** user has recorded at least the calibration/dev set per `research.md` (or schedules it); baseline numbers are **not** claimed; `memory.md` updated; **Stop.**
+| Subtask | Tasks | Files | Status |
+|---|---|---|---|
+| 2.1 Interface + WAV I/O | `ASREngine` protocol, `ASRResult`, `FakeEngine`, strict 16 kHz mono int16 WAV reader/writer | `src/voice_calculator/asr/base.py`, `audio/wavio.py` | **DONE** |
+| 2.2 Vosk baseline | `VoskEngine` with constrained number grammar, local model path configuration, offline error handling | `src/voice_calculator/asr/vosk_engine.py` | **DONE** |
+| 2.3 Dataset recording helper | `tools/record_dataset.py` with 94 structured prompt items, category filtering, interactive recording | `tools/record_dataset.py` | **DONE** |
+| 2.4 Transcribe CLI & Benchmark harness | `tools/transcribe.py` CLI and `tools/benchmark.py` harness with outcome classification | `tools/transcribe.py`, `tools/benchmark.py` | **DONE** |
 
 ---
 
-## Phase 3 — ASR Benchmark and Architecture Decision
+## Phase 3 — Full Desktop Architecture Foundation (COMPLETED)
 
-**Objective:** choose the ASR strategy using evidence. **This phase decides models; do not skip it.**
-**Prerequisites:** labeled recordings exist (`research.md` §3) with dev/calibration/test separation.
-**Dependencies:** Phases 1–2.
-**Read:** `research.md` (metrics, templates), `architecture.md` §7, §16.
+**Objective:** Complete modular desktop application architecture from audio capture to Tkinter UI.
 
-| Subtask | Tasks | Files |
-|---------|-------|-------|
-| 3.1 Benchmark harness | `tools/benchmark.py`: runs an engine over a labeled folder, outputs per-utterance CSV and the metrics in `research.md` §4 (Exact Integer Accuracy, False Addition Rate, etc.) computed with the **current default decision policy**; unit-test metric math with `FakeEngine` | `tools/benchmark.py`, tests |
-| 3.2 Whisper candidate | Add `WhisperEngine` (faster-whisper, local model path, CPU int8, no auto-download); justify dependency in `memory.md`; test with skip marker | `asr/whisper_engine.py` |
-| 3.3 Run benchmarks | Run Vosk-grammar and faster-whisper (`tiny.en`, `base.en`, optionally `small.en`) on the **dev/calibration** set; record latency and resource use; record results in `research.md` templates (real numbers only). Optional offline analysis: how often A and B agree/disagree, and whether disagreement predicts errors (hybrid hypothesis). | `research.md`, `data/results/` (git-ignored) |
-| 3.4 Decision record | Write the ADR in `research.md`: chosen engine/model, rejected options, evidence, residual risks. Propose ratification of PROVISIONAL targets in `prd.md` §13. **Do not run the final test set yet.** | `research.md`, `memory.md` |
-
-**Acceptance criteria:** results tables filled with measured values and dataset size N; ADR written; no fabricated numbers; the choice is justified by evidence even if "baseline is enough".
-**Exit criteria / Phase Gate:** **user reviews and approves the ADR and the provisional targets.** Then **Stop.**
+| Subtask | Tasks | Files | Status |
+|---|---|---|---|
+| 3.1 Prompt Consistency | Automated validation ensuring all dataset prompts conform to parser grammar | `tests/test_benchmark.py` | **DONE** |
+| 3.2 VAD & Segmentation | `EnergyVAD` detector and `UtteranceSegmenter` online FSM with pre-roll and hangover | `src/voice_calculator/audio/vad.py`, `segmenter.py` | **DONE** |
+| 3.3 Audio Pipeline | `AudioPipeline` orchestrating capture $\rightarrow$ segmentation $\rightarrow$ ASR $\rightarrow$ parsing | `src/voice_calculator/pipeline.py` | **DONE** |
+| 3.4 Safety Decision Engine | `SafetyDecisionEngine` classifying pipeline results into ACCEPT, REPEAT, REJECT; value masking | `src/voice_calculator/decision.py` | **DONE** |
+| 3.5 Calculator Core | `Calculator` state, immutable `HistoryEntry`, reversible LIFO `undo()`, reset dialog logic | `src/voice_calculator/calculator.py` | **DONE** |
+| 3.6 Desktop GUI & Controller | `VoiceCalculatorApp` Tkinter UI and `ListeningController` background worker thread with session isolation | `src/voice_calculator/gui.py`, `controller.py` | **DONE** |
+| 3.7 Safe & Fast Modes | `OperatingMode` (SAFE, FAST) selector with strict uncalibrated confidence gating | `src/voice_calculator/decision.py`, `gui.py` | **DONE** |
+| 3.8 VAD Pre-Roll Bug Fix | Fixed pre-roll silence buffer accounting in `UtteranceSegmenter` speech duration calculation | `src/voice_calculator/audio/segmenter.py` | **DONE** |
 
 ---
 
-## Phase 4 — Microphone Capture and Continuous Listening
+## Phase 4 — Candidate ASR Evaluation & Real Phone Benchmark (COMPLETED)
 
-**Objective:** a headless (console) pipeline: mic → VAD → utterances → ASR → parse → printed result, running continuously and stopping cleanly.
-**Prerequisites:** Phase 3 ADR approved (engine chosen).
-**Dependencies:** Phases 0–3.
-**Read:** `architecture.md` §3, §5, §6, §11.
+**Objective:** Low-end-first comparative ASR evaluation on real recorded speech and parser safety audit.
 
-| Subtask | Tasks | Files |
-|---------|-------|-------|
-| 4.1 Capture | `capture.py`: sounddevice stream, bounded queue, typed `MicNotFound`/`MicLost` errors; a fake audio source for tests (reads WAV) | `audio/capture.py`, tests |
-| 4.2 VAD + segmenter | Energy-based VAD with hangover and pre-roll; segmenter emits utterances with stats (duration, peak, RMS, clipping, damaged); unit-test with synthetic signals and recorded WAVs; thresholds in `config.py` | `audio/vad.py`, `audio/segmenter.py`, tests |
-| 4.3 Console pipeline | `tools/live_console.py`: worker thread wiring capture→segmenter→engine→parser; Start/Stop via keyboard in the console (dev tool only); clean shutdown; discards in-flight work on stop | `tools/live_console.py` |
-| 4.4 VAD experiment (optional, only if 4.2 shows missed/clipped utterances) | Compare energy VAD vs Silero using `research.md` VAD template; adopt only with evidence and justified dependency | `audio/vad.py`, `research.md` |
-
-**Tests:** segmenter/VAD tests offline; manual test: speak 20 numbers in a quiet room, note missed/clipped utterances in `research.md`.
-**Acceptance criteria:** continuous listening for ≥ 10 minutes without crash or unbounded queue growth (measured, reported); Stop returns promptly; no GUI code involved.
-**Exit criteria:** `memory.md` updated with observed issues; **Stop.**
+| Subtask | Tasks | Files | Status |
+|---|---|---|---|
+| 4A Whisper Candidate | Integrated `FasterWhisperEngine` (CTranslate2 `int8` CPU fallback, GPU optional, uncalibrated score invariant) | `src/voice_calculator/asr/whisper_engine.py` | **DONE** |
+| 4B Low-End CPU Benchmark | Dual-engine benchmark on 61-sample Dad dataset (`data/processed_phone/benchmark_dad/`). Vosk EIA 47.54%, tiny.en EIA 62.30% (tiny.en 60% higher wrong values: 13.11% vs 8.20%) | `data/processed_phone/analysis/`, `analysis/results/` | **DONE** |
+| 4C Natural Parser Expansion | Deterministic parser expansion for natural bare `hundred` and `thousand` forms. Vosk EIA rose from 47.54% $\rightarrow$ 57.38%, rejections dropped from 44.26% $\rightarrow$ 31.15% | `src/voice_calculator/numparse.py`, `tests/` | **DONE** |
+| 4D Parser Safety Audit | Prompt-by-prompt safety regression audit across all 61 samples. Proved 7 wrong values are ASR acoustic omissions, safely contained by confirm-by-default architecture | `docs/research.md` (EXP-003) | **DONE** |
+| 4E Natural-Speed Recording | New natural-speed recording session | *CANCELLED (user's father has no time; proceed with existing 61-sample baseline dataset)* | **CANCELLED** |
 
 ---
 
-## Phase 5 — Validation and Decision Engine
+## Phase 5 — Validation, Error Audit & Safety Calibration (IN PROGRESS)
 
-**Objective:** deterministic ACCEPT/CONFIRM/REJECT policy, safe by default.
-**Prerequisites:** Phases 1, 3, 4.
-**Dependencies:** 1, 3, 4.
-**Read:** `architecture.md` §9, `prd.md` §8, `research.md` (confidence calibration).
+**Objective:** Thorough safety hardening, error auditing, confirmation reliability, and evidence-based ADR ratification without requiring new live recordings.
 
-| Subtask | Tasks | Files |
-|---------|-------|-------|
-| 5.1 Decision core | `decision.py` pure function with hard rules and `auto_accept_enabled=false` default (confirm-all for parsed values; REJECT for failures; zero → CONFIRM); tests for every hard rule, including AC-3 and AC-10 | `decision.py`, tests |
-| 5.2 Signal checks | Add utterance-quality rejects (too short/long/quiet/clipped/damaged) using config thresholds; tests with synthetic stats | `decision.py`, `config.py`, tests |
-| 5.3 Calibration run | Using the **calibration set only**, evaluate candidate auto-accept rules via `tools/benchmark.py` (add a `--policy` option); record in `research.md` calibration record | `tools/benchmark.py`, `research.md` |
-| 5.4 Adopt or keep safe default | If a rule achieves 0 false additions on calibration data with acceptable confirm rate, add it **behind a config flag** and document; otherwise keep confirm-all and record why | `decision.py`, `memory.md` |
-
-**Acceptance criteria:** AC-3, AC-10 tests pass; any enabled auto-accept rule is backed by recorded calibration evidence; thresholds not tuned on the final test set.
-**Exit criteria:** **Stop.** (Phase Gate: user approves whether auto-accept stays off or on.)
+| Subtask | Tasks | Files | Status |
+|---|---|---|---|
+| **5A Error Audit & Synthetic Stress** | Audit error patterns on existing 61-sample Dad dataset; generate synthetic acoustic perturbations (noise floor, gain shifts, truncated pauses) to measure VAD and ASR robustness | `tools/`, `docs/research.md` | **READY** |
+| **5B Confirmation & Recovery Reliability** | Comprehensive invariant testing of GUI confirmation, Discard, Undo stack reversibility, and plain-language error messaging under abnormal pipeline events | `tests/test_decision.py`, `tests/test_gui.py`, `tests/test_controller.py` | **PLANNED** |
+| **5C ASR Model ADR (P2)** | Formalize Architecture Decision Record (ADR-001) in `docs/research.md` comparing Vosk baseline vs faster-whisper on low-end CPU hardware constraints | `docs/research.md`, `docs/memory.md` | **PLANNED** |
+| **5D VAD Calibration (P3) & Auto-Accept Rules (P4)** | Evaluate VAD hangover/threshold trade-offs on existing dataset; analyze confidence distributions to determine if any auto-accept rule can achieve 0 false additions | `src/voice_calculator/audio/vad.py`, `decision.py`, `docs/research.md` | **PLANNED** |
+| **5E Multi-Number (P7) & Zero Rule (P8)** | Verify multi-number rejection hardening (`RejectReason.MULTIPLE_NUMBERS`) and enforce zero confirmation rule (`zero` always requires confirmation) | `src/voice_calculator/numparse.py`, `decision.py`, tests | **PLANNED** |
 
 ---
 
-## Phase 6 — Calculation Core, History, Undo, Reset
+## Phase 6 — Reliability Testing, Packaging & Trial (PLANNED)
 
-**Objective:** pure, fully tested logic for total, history, undo, reset, plus the state machine and a headless controller.
-**Prerequisites:** Phase 0 (may be done earlier if convenient).
-**Dependencies:** Phase 0.
-**Read:** `architecture.md` §6, §10, `prd.md` FR-9–FR-11.
+**Objective:** Long-session stability verification, standalone Windows packaging, and user acceptance trial.
 
-| Subtask | Tasks | Files |
-|---------|-------|-------|
-| 6.1 Calculator | `Calculator`: add, undo (repeatable), reset, derived total, display log of non-added events; range enforcement; property-style tests (total == sum of non-undone entries) | `calculator.py`, tests |
-| 6.2 State machine | `state.py` enum + transition table from `architecture.md` §6; invalid transitions ignored without exceptions; tests for every row | `state.py`, tests |
-| 6.3 Headless controller | `controller.py`: consumes pipeline events/decisions, applies to calculator/state; testable with fakes; no Tk | `controller.py`, tests |
-
-**Acceptance criteria:** AC-2; every state-table row tested; no GUI/audio imports in these modules.
-**Exit criteria:** **Stop.**
-
----
-
-## Phase 7 — GUI Integration
-
-**Objective:** the Tkinter app exactly per `design.md`, wired to the real pipeline.
-**Prerequisites:** Phases 4, 5, 6.
-**Dependencies:** 4, 5, 6.
-**Read:** `design.md` (all), `architecture.md` §11.
-
-| Subtask | Tasks | Files |
-|---------|-------|-------|
-| 7.1 Static layout | Window with all widgets from `design.md` §12, messages table, no logic | `gui/app.py`, `gui/messages.py` |
-| 7.2 Wiring with fake pipeline | Controller events drive status/total/history using a scripted fake pipeline; `after()` polling; Start/Stop/Undo/Reset/Add/Discard handlers | `gui/app.py`, `controller.py` |
-| 7.3 Real pipeline | Replace fake with real capture→ASR pipeline in worker thread; model loading in background; Start disabled until ready | `controller.py`, `gui/app.py` |
-| 7.4 Confirmation, undo, reset flows | Confirmation panel + keyboard shortcuts; undo; reset dialog (Cancel default); exactly per `design.md` §6, §8, §9 | `gui/app.py` |
-| 7.5 Error states | All messages from `design.md` §7; error recovery paths from `prd.md` §9 | `gui/app.py`, `gui/messages.py` |
-
-**Tests:** controller tests with fakes (automated); GUI checked by a manual checklist (record in `memory.md`); simple smoke test that the window builds and closes.
-**Acceptance criteria:** FR-1…FR-15 manually verified; no Tk calls off the main thread; AC-7 method defined.
-**Exit criteria:** **Stop.** (Phase Gate: user tries the app and lists UI issues.)
-
----
-
-## Phase 8 — Reliability Testing and Windows Packaging
-
-**Objective:** prove it is reliable, then package.
-**Prerequisites:** Phase 7.
-**Dependencies:** all earlier phases.
-**Read:** `prd.md` §13, `research.md` §4 and §13, `architecture.md` §14.
-
-| Subtask | Tasks | Files |
-|---------|-------|-------|
-| 8.1 Latency & stall measurement | Instrument timing (debug only); measure end-of-speech → UI latency and GUI stalls; record in `research.md` | `tools/`, `research.md` |
-| 8.2 Long-session soak | 60-minute continuous run; record memory/CPU trend and crashes | `research.md` |
-| 8.3 Error matrix | Manually trigger each error in `prd.md` §9; record pass/fail | `memory.md` |
-| 8.4 Final test-set evaluation | Run the **held-out test set once** with the final configuration; report AC-4, AC-5, AC-6 with N and upper bounds. Any failure → return to Phase 5 (do not tune on this set; collect a new test set if needed) | `research.md` |
-| 8.5 Packaging | PyInstaller one-folder build; models placed in app folder; build instructions in `README.md`; `build/`, `dist/` git-ignored | build spec, `README.md` |
-| 8.6 Clean-machine smoke test | Run packaged build offline on a machine/profile without Python; check AC-9, AC-12 | `memory.md` |
-
-**Acceptance criteria:** `prd.md` AC-4…AC-12 measured and recorded (met or explicitly reported as not met).
-**Exit criteria:** user performs a real-use trial with the father's workflow; issues logged in `memory.md`. **Stop.** MVP complete only when the user says so.
+| Subtask | Tasks | Files | Status |
+|---|---|---|---|
+| 6.1 Long-Session Soak | 60-minute continuous listening soak test verifying bounded memory RSS, CPU stability, and zero GUI event stalls | `tools/`, `docs/research.md` | **PLANNED** |
+| 6.2 Error Matrix Verification | Trigger and verify recovery from all error conditions in `prd.md` §9 (mic disconnect, malformed speech, model missing) | `tests/`, `docs/memory.md` | **PLANNED** |
+| 6.3 Windows Packaging (P9) | PyInstaller one-folder packaging build spec bundling models and offline runtime | `build_spec/`, `README.md` | **PLANNED** |
+| 6.4 Clean-Machine Trial | Verify packaged build on a clean Windows machine without Python; conduct user/father workflow trial | `docs/memory.md` | **PLANNED** |

@@ -1,0 +1,27 @@
+{
+  "engine": "vosk",
+  "dataset": "benchmark_dad",
+  "model_path": "D:\\business voice calculator\\models\\vosk-model-small-en-us",
+  "model_load_time_seconds": 0.57,
+  "total_prompts": 62,
+  "eligible_prompts": 61,
+  "excluded_prompts": [
+    16
+  ],
+  "exact_numeric_accuracy_pct": 47.54,
+  "correct_count": 29,
+  "incorrect_count": 32,
+  "parser_rejection_rate_pct": 44.26,
+  "rejected_count": 27,
+  "wrong_parsed_value_rate_pct": 8.2,
+  "wrong_value_count": 5,
+  "safe_failure_rate_pct": 91.8,
+  "safe_count": 56,
+  "latency_ms": {
+    "mean": 29.06,
+    "median": 26.72,
+    "p95": 41.86,
+    "min": 19.55,
+    "max": 60.22
+  }
+}

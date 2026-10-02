@@ -1,0 +1,102 @@
+{
+  "engine": "vosk",
+  "config": "cpu_kaldi",
+  "total_prompts": 62,
+  "eligible_prompts": 61,
+  "excluded_prompts": [
+    16
+  ],
+  "exact_numeric_accuracy_pct": 57.38,
+  "correct_count": 35,
+  "wrong_parsed_value_rate_pct": 11.48,
+  "wrong_count": 7,
+  "parser_rejection_rate_pct": 31.15,
+  "rejected_count": 19,
+  "safe_failure_rate_pct": 88.52,
+  "safe_count": 54,
+  "model_load_time_seconds": 0.766,
+  "latency_ms": {
+    "mean": 34.62,
+    "median": 32.8,
+    "p95": 51.6,
+    "min": 22.83,
+    "max": 66.93
+  },
+  "memory_mb": {
+    "baseline_rss_mb": 48.13,
+    "post_load_rss_mb": 177.25,
+    "peak_rss_mb": 180.95,
+    "final_rss_mb": 173.34,
+    "delta_from_baseline_mb": 125.21,
+    "checkpoints": {
+      "after_1_utterances_rss_mb": 180.35,
+      "after_1_utterances_peak_mb": 180.35,
+      "after_10_utterances_rss_mb": 180.88,
+      "after_10_utterances_peak_mb": 180.88,
+      "after_50_utterances_rss_mb": 173.28,
+      "after_50_utterances_peak_mb": 180.95,
+      "after_61_utterances_rss_mb": 173.34,
+      "after_61_utterances_peak_mb": 180.95,
+      "after_62_utterances_rss_mb": 173.34,
+      "after_62_utterances_peak_mb": 180.95
+    }
+  },
+  "category_breakdown": {
+    "0-19 (Basic/Teens)": {
+      "eligible": 13,
+      "correct": 9,
+      "accuracy_pct": 69.23,
+      "rejected": 3,
+      "wrong_value": 1,
+      "safe_failure_pct": 92.31
+    },
+    "20-99 (Tens)": {
+      "eligible": 20,
+      "correct": 8,
+      "accuracy_pct": 40.0,
+      "rejected": 9,
+      "wrong_value": 3,
+      "safe_failure_pct": 85.0
+    },
+    "100-999 (Hundreds)": {
+      "eligible": 15,
+      "correct": 9,
+      "accuracy_pct": 60.0,
+      "rejected": 5,
+      "wrong_value": 1,
+      "safe_failure_pct": 93.33
+    },
+    "1000-2000 (Thousands)": {
+      "eligible": 13,
+      "correct": 9,
+      "accuracy_pct": 69.23,
+      "rejected": 2,
+      "wrong_value": 2,
+      "safe_failure_pct": 84.62
+    },
+    "Natural speech variants": {
+      "eligible": 17,
+      "correct": 12,
+      "accuracy_pct": 70.59,
+      "rejected": 4,
+      "wrong_value": 1,
+      "safe_failure_pct": 94.12
+    },
+    "Digit sequences": {
+      "eligible": 5,
+      "correct": 0,
+      "accuracy_pct": 0.0,
+      "rejected": 5,
+      "wrong_value": 0,
+      "safe_failure_pct": 100.0
+    },
+    "Confusable pairs (teens/tens)": {
+      "eligible": 15,
+      "correct": 8,
+      "accuracy_pct": 53.33,
+      "rejected": 4,
+      "wrong_value": 3,
+      "safe_failure_pct": 80.0
+    }
+  }
+}

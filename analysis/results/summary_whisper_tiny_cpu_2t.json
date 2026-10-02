@@ -1,0 +1,102 @@
+{
+  "engine": "faster-whisper-tiny",
+  "config": "cpu_int8_2threads",
+  "total_prompts": 62,
+  "eligible_prompts": 61,
+  "excluded_prompts": [
+    16
+  ],
+  "exact_numeric_accuracy_pct": 62.3,
+  "correct_count": 38,
+  "wrong_parsed_value_rate_pct": 13.11,
+  "wrong_count": 8,
+  "parser_rejection_rate_pct": 24.59,
+  "rejected_count": 15,
+  "safe_failure_rate_pct": 86.89,
+  "safe_count": 53,
+  "model_load_time_seconds": 0.315,
+  "latency_ms": {
+    "mean": 489.58,
+    "median": 478.23,
+    "p95": 558.8,
+    "min": 435.36,
+    "max": 581.92
+  },
+  "memory_mb": {
+    "baseline_rss_mb": 214.18,
+    "post_load_rss_mb": 293.5,
+    "peak_rss_mb": 377.61,
+    "final_rss_mb": 305.85,
+    "delta_from_baseline_mb": 91.67,
+    "checkpoints": {
+      "after_1_utterances_rss_mb": 299.76,
+      "after_1_utterances_peak_mb": 376.96,
+      "after_10_utterances_rss_mb": 300.36,
+      "after_10_utterances_peak_mb": 377.24,
+      "after_50_utterances_rss_mb": 304.04,
+      "after_50_utterances_peak_mb": 377.61,
+      "after_61_utterances_rss_mb": 305.91,
+      "after_61_utterances_peak_mb": 377.61,
+      "after_62_utterances_rss_mb": 305.85,
+      "after_62_utterances_peak_mb": 377.61
+    }
+  },
+  "category_breakdown": {
+    "0-19 (Basic/Teens)": {
+      "eligible": 13,
+      "correct": 7,
+      "accuracy_pct": 53.85,
+      "rejected": 6,
+      "wrong_value": 0,
+      "safe_failure_pct": 100.0
+    },
+    "20-99 (Tens)": {
+      "eligible": 20,
+      "correct": 12,
+      "accuracy_pct": 60.0,
+      "rejected": 4,
+      "wrong_value": 4,
+      "safe_failure_pct": 80.0
+    },
+    "100-999 (Hundreds)": {
+      "eligible": 15,
+      "correct": 12,
+      "accuracy_pct": 80.0,
+      "rejected": 3,
+      "wrong_value": 0,
+      "safe_failure_pct": 100.0
+    },
+    "1000-2000 (Thousands)": {
+      "eligible": 13,
+      "correct": 7,
+      "accuracy_pct": 53.85,
+      "rejected": 2,
+      "wrong_value": 4,
+      "safe_failure_pct": 69.23
+    },
+    "Natural speech variants": {
+      "eligible": 17,
+      "correct": 12,
+      "accuracy_pct": 70.59,
+      "rejected": 4,
+      "wrong_value": 1,
+      "safe_failure_pct": 94.12
+    },
+    "Digit sequences": {
+      "eligible": 5,
+      "correct": 0,
+      "accuracy_pct": 0.0,
+      "rejected": 4,
+      "wrong_value": 1,
+      "safe_failure_pct": 80.0
+    },
+    "Confusable pairs (teens/tens)": {
+      "eligible": 15,
+      "correct": 8,
+      "accuracy_pct": 53.33,
+      "rejected": 4,
+      "wrong_value": 3,
+      "safe_failure_pct": 80.0
+    }
+  }
+}
