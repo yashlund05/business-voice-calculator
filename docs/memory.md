@@ -7,18 +7,22 @@
 
 ## 1. Project Status
 
-- **Overall status:** Phase 5C (ASR Model ADR / P2) completed. 422 unit/mock/integration tests passing, 1 model-dependent test cleanly skipped (100% pass rate). Zero false additions invariant intact.
+- **Overall status:** Phase 5D (VAD Calibration & Auto-Accept Rules) completed. 422 unit/mock/integration tests passing, 1 model-dependent test cleanly skipped (100% pass rate). Zero false additions invariant intact.
 - **Last updated:** 2026-10-03
 
 ## 2. Current Phase
 
-- Phase: **Phase 5 — Validation, Error Audit & Safety Calibration** (Subtasks 5A, 5B, 5C completed).
+- Phase: **Phase 5 — Validation, Error Audit & Safety Calibration** (Subtasks 5A–5D completed).
 
 ## 3. Current Task
 
-- Phase 5C completed. Next: Phase 5D (VAD Calibration P3 & Auto-Accept Rules P4).
+- Phase 5D completed. Next: Phase 5E (Multi-Number Rejection P7 & Zero Rule P8).
 
 ## 4. Completed Work
+
+- [5D VAD Calibration (P3) & Auto-Accept Rules (P4)] Ran EXP-006 and EXP-007 (no production code changes; config defaults retained per evidence).
+  * EXP-006 (`tools/calibrate_vad.py`, `analysis/vad_calibration.csv`): 24-config grid (thresholds 450–1000 RMS x hangovers 350–1000 ms) on `dad_continuous_16k.wav` scored against 57 ground-truth speech intervals parsed from the error-audit notes. Missed utterances = 0 in all configs. Recording noise floor (p25=488, p50=862 RMS) sits at the 500 threshold, explaining EXP-001 merging/cap hits (baseline 500/700: 1 clean, 49 merged, 16 cap hits); best isolation 1000/350 (40 clean, 2 split, 15 merged, 0 cap). Failure-mode asymmetry established: merging is safe (parser rejections), splitting is riskier (partial numbers). ADR-002 accepted: EnergyVAD retained with current defaults for quiet room; Silero not adopted; adopted rule — deployment threshold must be >= ~2x measured ambient floor; live-mic verification deferred to Phase 6.4 trial.
+  * EXP-007 (`tools/analyze_auto_accept.py`, `analysis/auto_accept_signals.csv`): probed all candidate auto-accept signals on 61 eligible utterances. Vosk word-level confidence (SetWords probe): correct med 1.000 vs wrong med 1.000 — full overlap, wrong values are confidently wrong; no threshold reaches 0 wrong among accepted (REJECTED). RMS energy: no separation (REJECTED). Dual-engine agreement: 28/61 auto-accepted, 0 wrong (95% bound ~10.7%) — statistically insufficient and not test-split-validated (DEFERRED as sole future candidate). ADR-003 accepted: auto-accept stays disabled (`AUTO_ACCEPT_ENABLED = False`); Safe Mode confirm-all is the shipping policy; Fast Mode deterministically requires confirmation.
 
 - [5C ASR Model ADR (P2)] Formalized ADR-001 in `docs/research.md` §12 and marked it ACCEPTED: **Vosk small English + constrained number-word grammar is the default deployed ASR engine**; faster-whisper `tiny.en` remains a modular, benchmarkable candidate; hybrid cross-check not adopted for MVP (oracle 73.8% requires a per-utterance selection signal that does not exist; would double latency/memory for unproven benefit). Rationale from measured evidence (EXP-002/003/004/005): lowest wrong-value risk profile (7/61 vs 8/61, dominated by safely rejected structures vs tiny.en's word drops and hallucinated digits), 12–14× lower median latency, ~2× less RAM, grammar-constrained output bounds hallucination. Updated `docs/architecture.md` §7 Engine Status and §16 [BENCH] decisions; updated research objectives R1/R2/R3 statuses. Pending decision P2 resolved. No source code changes.
 - [5C Gate: ADR-004 Target Ratification (P5)] User ratified the PROVISIONAL targets at the Phase 5C gate: **AC-4 (0 false additions, ≥500-utterance held-out set), AC-6 (latency), AC-8 (stability) ratified as written; AC-5 (≤20% confirm+reject) amended** to a measured-and-reported trial metric, because confirm-all makes CONFIRM+REJECT 100% by construction and even the 73.8% two-engine oracle cannot reach the 80% auto-add accuracy the old bar implied. `docs/prd.md` §13 updated; ADR-004 recorded in `docs/research.md` §12. Pending decision P5 resolved.
@@ -62,8 +66,8 @@
 - Architecture foundation laid per `architecture.md`.
 - Modules that exist in code: `voice_calculator.config`, `voice_calculator.logging_setup`, `voice_calculator.numparse`, `voice_calculator.audio.capture`, `voice_calculator.audio.wavio`, `voice_calculator.audio.vad`, `voice_calculator.audio.segmenter`, `voice_calculator.asr.base`, `voice_calculator.asr.vosk_engine`, `voice_calculator.asr.whisper_engine`, `voice_calculator.benchmark`, `voice_calculator.pipeline`, `voice_calculator.decision`, `voice_calculator.calculator`, `voice_calculator.controller`, `voice_calculator.gui`.
 - Chosen ASR engine: **Vosk small English + constrained grammar baseline** (ratified by ADR-001, 2026-10-03; faster-whisper retained as modular benchmarkable candidate, hybrid not adopted for MVP).
-- VAD: **EnergyVAD baseline (500.0 RMS threshold, 250ms pre-roll, 700ms hangover, 250ms min utterance, 6000ms max utterance)** (pending Phase 5D calibration).
-- Operating Mode default: **Safe Mode** (`OperatingMode.SAFE`); auto-accept policy is **off** (`AUTO_ACCEPT_ENABLED = False`).
+- VAD: **EnergyVAD baseline (500.0 RMS threshold, 250ms pre-roll, 700ms hangover, 250ms min utterance, 6000ms max utterance)** (ratified by ADR-002, 2026-10-03 — quiet-room defaults; deployment threshold must be ≥ ~2× measured ambient floor; live-mic verification at Phase 6.4).
+- Operating Mode default: **Safe Mode** (`OperatingMode.SAFE`); auto-accept policy is **off** (`AUTO_ACCEPT_ENABLED = False`, ratified by ADR-003 — no eligible auto-accept rule exists on current evidence).
 
 ## 6. Confirmed Decisions
 
@@ -95,6 +99,8 @@
 | 24 | Confirmation UI recovery invariant: any STARTED, STOPPED, or ERROR controller event discards the pending candidate and hides the Add/Discard buttons; confirmation actions are guarded by AWAITING_CONFIRMATION state so stale Add/Discard interactions can never modify the total | 2026-10-03 | Phase 5B implementation |
 | 25 | ADR-001 (P2): Vosk small English + constrained number-word grammar is the default deployed ASR engine; faster-whisper `tiny.en` remains a modular benchmarkable candidate (not default); hybrid cross-check not adopted for MVP. Evidence: EXP-002/003/004/005 (lower wrong-value risk, 12–14× latency advantage, ~2× less RAM, grammar-bounded hallucination) | 2026-10-03 | `research.md` §12 ADR-001 |
 | 26 | ADR-004 (P5): AC-4, AC-6, AC-8 ratified as written; AC-5 amended to "measured and reported at the Phase 6.4 trial" — the absolute ≤20% confirm+reject bar is unattainable under confirm-all (100% by construction; even the 73.8% oracle union < the 80% auto-add accuracy it implied). AC-4 is never relaxed to compensate for usability | 2026-10-03 | `research.md` §12 ADR-004 (user-selected "Amend AC-5") |
+| 27 | ADR-002 (P3): EnergyVAD retained with current defaults (500 RMS / 250ms pre-roll / 700ms hangover / 250ms min / 6000ms max) as quiet-room defaults; Silero not adopted (0 missed utterances across 24-config grid; failures are threshold-placement issues); operational rule: deployment threshold ≥ ~2× measured ambient floor; live-mic verification at Phase 6.4 | 2026-10-03 | `research.md` §12 ADR-002, EXP-006 |
+| 28 | ADR-003 (P4): Auto-accept remains disabled for v1; confirm-all is the shipping policy. R-CONF and R-RMS rejected (no separation: wrong values are confidently wrong, med word-conf 1.000); R-AGREE (dual-engine same-value agreement: 28/61, 0 wrong, bound ~10.7%) deferred pending calibration+held-out test datasets and cost analysis | 2026-10-03 | `research.md` §12 ADR-003, EXP-007 |
 
 ## 7. Pending Decisions
 
@@ -102,8 +108,8 @@
 |---|----------|-----------------|-----------|
 | P1 | Python version | **Resolved: 3.11.9** | Phase 0 |
 | P2 | ASR engine/model (Vosk vs faster-whisper) | **Resolved: Vosk small + grammar (ADR-001, 2026-10-03)** | Phase 5C |
-| P3 | VAD choice and timings | EnergyVAD (500 RMS threshold, 250ms pre-roll, 700ms hangover) | Phase 5D calibration |
-| P4 | Auto-accept rules/thresholds | None (confirm-all default) | Phase 5D |
+| P3 | VAD choice and timings | **Resolved: EnergyVAD + current defaults ratified (ADR-002, 2026-10-03)** | Phase 5D |
+| P4 | Auto-accept rules/thresholds | **Resolved: auto-accept stays OFF for v1 (ADR-003, 2026-10-03); R-AGREE deferred** | Phase 5D |
 | P5 | Ratify PROVISIONAL targets in `prd.md` §13 | **Resolved: AC-4/6/8 ratified; AC-5 amended (ADR-004, 2026-10-03)** | Phase 5C gate |
 | P6 | Accept natural hundred/thousand forms | **Resolved: Accepted** | Phase 4C |
 | P7 | Multiple numbers per utterance | Reject (`MULTIPLE_NUMBERS`) | Phase 5E |
@@ -153,6 +159,8 @@
 - Natural speech grammar expansion (bare `hundred` and `thousand` forms) recovered 6 valid utterances (+9.84% EIA) with zero ML compute overhead, while confirming that acoustic deletions by ASR front-ends require defense-in-depth at the confirmation layer.
 - Confirmation prompts must be explicitly cleared on every abnormal controller event (ERROR, STOPPED) and on session restart (STARTED); state guards alone block stale additions but leave an orphaned "Add N" prompt visible that confuses the user during recovery.
 - Synthetic Tk key events (`event_generate`) are only delivered to viewable windows holding input focus; GUI keyboard-shortcut tests must `deiconify()` + `focus_force()` the root before generating Enter/Escape events.
+- Grammar-constrained ASR is **confidently wrong**: misheard number words receive near-1.0 word likelihoods, so confidence signals cannot separate correct from wrong recognitions (EXP-007). Auto-accept by confidence threshold is structurally unsafe for this application.
+- VAD failure modes are asymmetric: threshold ≈ noise floor causes *merging* (safe parser rejections), short hangover causes *splitting* (partial numbers with possible wrong additive sums). Prefer the configuration whose failure mode is the safe one (longer hangover, threshold above floor).
 
 ## 12. Dependencies Added (with justification)
 
@@ -166,7 +174,7 @@
 
 ## 13. Next Task
 
-- **Phase 5C**: ASR Model ADR (P2) — formalize ADR-001 in `docs/research.md` comparing Vosk baseline vs faster-whisper on low-end CPU hardware constraints (inputs: Phase 4B/4C benchmarks, EXP-003/004/005, error taxonomy, stress robustness).
+- **Phase 5E**: Multi-number rejection hardening (P7, `RejectReason.MULTIPLE_NUMBERS`) and zero confirmation rule enforcement (P8) — verify existing behavior with dedicated invariant tests, close both pending decisions.
 
 ## 15. Do Not Change Casually (requires explicit user approval)
 

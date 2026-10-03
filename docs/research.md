@@ -124,6 +124,8 @@ Ground truth per utterance: a valid integer v (0–2000) or `NEGATIVE`. "Added" 
 | EXP-003 | Natural Speech Parser Expansion & Controlled Vosk Re-Benchmark | 2026-10-02 | Completed | Deterministic parser extended for natural bare hundred/thousand forms ('hundred', 'hundred ten', 'hundred twenty five', 'hundred fifty', 'hundred seventy five', 'thousand'). Vosk re-benchmark on identical 61 eligible Dad recordings: EIA increased from 47.54% to 57.38% (+9.84% gain, +6 correct numbers parsed with 0 added compute/ML complexity). Rejection rate dropped from 44.26% to 31.15%. Wrong parsed values rose from 8.20% (5/61) to 11.48% (7/61) due to ASR deletion of leading multipliers ('two thousand' transcribed as 'thousand' -> 1000; 'twelve hundred fifty' transcribed as 'hundred fifteen' -> 115). Safe failure rate remains high at 88.52% (vs Whisper 86.89%). Proves 22% of Vosk's baseline rejections were purely grammar-induced and recoverable safely by deterministic parsing. |
 | EXP-004 | Error Taxonomy Audit & Engine Complementarity Analysis | 2026-10-02 | Completed | Classified all 61 eligible Dad utterances into formal taxonomy across Vosk and faster-whisper tiny.en (2t). Vosk errors concentrate in empty transcripts (11.5%) and phonetic confusions (6.6%), whereas Whisper tiny.en errors concentrate in word drops (6.6%) and digit hallucinations (4.9%). Both engines correct on 28/61 (45.9%); Vosk-only correct on 7/61 (11.5%); Whisper-only correct on 10/61 (16.4%); both failed/rejected on 16/61 (26.2%). Theoretical oracle union is 45/61 (73.8%). Containment verified: 0/15 wrong parsed values auto-added. Full logs in analysis/error_audit.md. |
 | EXP-005 | Synthetic Stress Benchmark: Tempo, Volume, and Stationary Noise Robustness | 2026-10-02 | Completed | Evaluated 6 synthetic audio variants (tempo 0.9x/1.15x, gain +/-6dB, pink noise SNR 20dB/10dB) on 61 Dad prompts. Vosk EIA ranged 52.46% to 60.66% with median latency 23.8-35.3 ms. Whisper tiny.en (2t) EIA ranged 50.82% to 57.38% with median latency 423-432 ms. Thread scaling showed negative returns past 2 threads on target CPU. Severe noise/attenuation increased rejections, maintaining safe failure rates >= 85.25% in all conditions. Full report in analysis/stress_comparison.md. |
+| EXP-006 | VAD Threshold/Hangover Calibration Grid on Continuous Dad Recording | 2026-10-03 | Completed | Grid of 6 thresholds x 4 hangovers (24 configs) scored against 57 ground-truth speech intervals parsed from `analysis/error_audit.csv` notes. Recording frame RMS profile: p10=388, p25=488, p50=862, p75=4073 — the phone channel's ambient floor (approx 450-550 RMS) sits AT the current 500 threshold, explaining EXP-001's merging/cap hits. Missed utterances = 0 in all 24 configs (min-utterance filter robust). Baseline 500/700: 19 segments, 1 clean, 49 merged, 16 cap hits. Best isolation at high threshold + short hangover: 1000/350 -> 55 segments, 40 clean, 2 split, 15 merged, 0 missed, 5 false triggers, 0 cap hits. Failure-mode asymmetry: merging (MULTIPLE_NUMBERS rejection, safe) vs splitting (partial numbers, riskier); intra-phrase-pause bridging favors longer hangover. Full grid in analysis/vad_calibration.csv. |
+| EXP-007 | Auto-Accept Signal Analysis: Word Confidence, Engine Agreement, RMS Energy | 2026-10-03 | Completed | Probed all candidate signals on 61 eligible utterances. (1) Vosk word-level confidence via SetWords probe: correct n=35 (med 1.000, p25 0.919) vs wrong n=7 (med 1.000, p25 0.953) — distributions fully overlap; wrong values are CONFIDENTLY wrong (grammar-constrained decoding assigns ~1.0 likelihood to a confidently-misheard number word). No threshold achieves 0 wrong among accepted (T=0.95 still has 5 wrong). FinalResult top-level confidence field is absent/constant (unusable). (2) Dual-engine agreement (Vosk value == whisper value): 28/61 auto-accepted with 0 wrong — rule-of-three 95% upper bound ~10.7%, insufficient per §9 policy without a held-out test split. (3) RMS energy: correct med 2664 vs wrong med 2547 — no separation; 0-wrong only at coverage 1-3 utterances (loudness coincidence). CONCLUSION: no auto-accept rule is eligible for production; confirm-all stays (ADR-003). Full signals in analysis/auto_accept_signals.csv. |
 
 ## 6. Results Table Template
 
@@ -176,6 +178,15 @@ Dataset: `dev` recordings + live trials. All empirical dataset numbers `PENDING`
 | Exp | VAD (energy / Silero) | Threshold | Pre-roll (ms) | Hangover (ms) | Min/Max utt (ms) | Missed utterances | Clipped starts/ends | False triggers (noise) | Split utterances (one number → two) | Added dependency size |
 |-----|-----------------------|-----------|---------------|---------------|------------------|-------------------|---------------------|------------------------|-------------------------------------|----------------------|
 | EXP-001 (Phase 3.8) | EnergyVAD | 500.0 RMS | 250 ms | 700 ms | 250 / 6000 ms | PENDING (real dataset) | 0 clipped in unit tests | Fixed onset noise leak | 0 splits observed on <700ms pause | 0 MB (stdlib/numpy) |
+| EXP-006 (Phase 5D) | EnergyVAD | 450–1000 RMS grid | 250 ms | 350–1000 ms grid | 250 / 6000 ms | **0 in all 24 configs** | not scored (segment-level) | 0–5 per config (noise floor fluctuation) | 2–11 per config; 0 at some configs | 0 MB (stdlib/numpy) |
+
+**EXP-006 calibration findings (Phase 5D, 2026-10-03):**
+- The continuous Dad phone recording's frame RMS profile is p10=388 / p25=488 / p50=862 / p75=4073 — the ambient floor (~450–550 RMS) sits **at** the 500 threshold, which is exactly why EXP-001 observed merged 6s-capped segments (baseline 500/700 on this recording: 19 segments, 1 clean, 49 merged, 16 cap hits).
+- Missed utterances = 0 across all 24 grid configurations (threshold 450–1000, hangover 350–1000): the min-utterance filter is robust; higher thresholds do not drop speech onsets on this material.
+- Best isolation on noisy input: high threshold + short hangover (1000/350 → 40/57 clean intervals, 2 splits, 15 merges, 5 false triggers, 0 cap hits).
+- **Failure-mode asymmetry:** too-low threshold → *merging* (multiple numbers in one segment → parser `MULTIPLE_NUMBERS`/`AMBIGUOUS` rejection → safe repeat request, plus occasional wrong-at-confirm candidates contained by confirmation). Too-short hangover → *splitting* (partial numbers; additive parts can sum incorrectly, e.g. "two"+"thousand" → 2 + 1000). Merging is the safer failure mode; the 700 ms hangover is retained for intra-phrase-pause bridging (Phase 3.8 evidence).
+- **Operational rule (adopted):** the configured threshold must sit at ≥ ~2× the measured ambient floor of the deployment environment; when floor ≈ threshold the system degrades to merging/cap hits. The phone-recording floor (450–550) is *not* the target laptop mic environment; live-mic floor measurement and threshold verification are scheduled for the Phase 6.4 trial.
+- Silero/heavier VAD not adopted: EnergyVAD shows 0 missed utterances in all conditions and the failure modes are threshold-placement issues, not detector-capacity issues — the added dependency is unjustified per the decision rule above.
 
 Decision rule: adopt a heavier VAD only if it measurably improves missed/clipped/false-trigger counts on the same recordings and the dependency cost is justified in `memory.md`.
 
@@ -191,17 +202,22 @@ Purpose: test whether any signal separates correct from incorrect recognitions. 
 
 | Signal | Available from | Distribution on correct (N) | Distribution on wrong (N) | Separation (e.g. overlap, simple ROC description) | Usable? | Notes |
 |--------|----------------|-----------------------------|----------------------------|---------------------------------------------------|---------|-------|
-| ASR confidence | Vosk / Whisper (per engine) | PENDING | PENDING | PENDING | PENDING | |
+| ASR confidence (word-level, SetWords probe) | Vosk (EXP-007) | n=35: min 0.511, p25 0.919, med 1.000, max 1.000 | n=7: min 0.651, p25 0.953, med 1.000, max 1.000 | None — full overlap; wrong p25 exceeds correct p25 | **NO** | Grammar-constrained decoding is confidently wrong on misheard number words; production engine returns confidence=None (unchanged) |
+| ASR confidence (utterance-level field) | Vosk FinalResult (EXP-007) | n/a | n/a | n/a | **NO** | Field absent/constant across all 61 utterances |
 | Utterance duration vs word count | segmenter | PENDING | PENDING | PENDING | PENDING | |
-| Signal level (RMS/peak) | segmenter | PENDING | PENDING | PENDING | PENDING | |
-| Engine agreement | A vs B | PENDING | PENDING | PENDING | PENDING | |
+| Signal level (RMS/peak) | segmenter (EXP-007) | n=35: med 2664, min 1831, max 4808 | n=7: med 2547, min 1521, max 3375 | None — full overlap; 0-wrong only at coverage ≤3 (loudness coincidence) | **NO** | |
+| Engine agreement | A vs B (EXP-007, from EXP-004 data) | agreed & correct: 28/61 | agreed & wrong: 0/28 | Agreement selects 45.9% of utterances with 0 wrong observed (95% bound ~10.7%) | **DEFERRED** | Strongest future candidate; requires held-out test split ≥500 + doubles runtime cost |
 | N-best disagreement | engine | PENDING | PENDING | PENDING | PENDING | |
 
 **Candidate auto-accept rules tested:**
 
 | Rule ID | Description | Calibration N | Auto-accepted | Wrong among accepted | Confirm % | Reject % | Verdict |
 |---------|-------------|---------------|---------------|----------------------|-----------|----------|---------|
-| _none yet_ | | | | | | | |
+| R-CONF | Auto-accept when Vosk mean word confidence ≥ T | 61 (EXP-007 SetWords probe) | up to 42 | **≥ 5 at every T** (T=0.95 → 24 correct / 5 wrong) | n/a | n/a | **REJECTED** — wrong values are confidently wrong (med 1.000); no separating threshold exists |
+| R-RMS | Auto-accept when utterance mean RMS ≥ T | 61 (EXP-007) | 3 at T=3500 | 0 (coverage 1–3 utterances) | n/a | n/a | **REJECTED** — distributions overlap (correct med 2664 vs wrong med 2547); 0-wrong cells are loudness coincidences with N≤3 |
+| R-AGREE | Auto-accept only when Vosk AND faster-whisper independently parse the SAME integer | 61 (EXP-007 / EXP-004 data) | 28/61 (45.9%) | **0/28** (95% upper bound ~10.7%) | 54.1% (disagreements + rejections) | 31.1% | **DEFERRED** — strongest candidate, but §9 policy requires re-evaluation unchanged on a held-out test split (≥500) which does not exist; also doubles runtime cost (both engines per utterance) |
+
+**EXP-007 conclusion (Phase 5D, 2026-10-03):** on the available evidence, **no auto-accept rule is eligible for production** — R-CONF and R-RMS cannot separate correct from wrong values, and R-AGREE, while measured at 0 wrong among 28 accepted, cannot satisfy the §9 eligibility policy without a proper calibration + held-out test dataset (Phase 4E cancelled; ≥500-utterance set uncollected). Confirm-all remains the operating policy (ADR-003).
 
 Policy: a rule is eligible for use only if it yields 0 wrong among accepted on calibration data **and** the same rule is later evaluated unchanged on the `test` split. Failure on test → rule removed or redesigned and a new test set collected.
 
@@ -233,8 +249,8 @@ Record dead ends so they are not repeated.
 | ADR | Title | Status | Date |
 |-----|-------|--------|------|
 | ADR-001 | ASR engine and model strategy | **ACCEPTED** | 2026-10-03 |
-| ADR-002 | VAD choice and segmentation settings | PENDING (Phase 5D) | — |
-| ADR-003 | Auto-accept policy (on/off, rules) | PENDING (Phase 5D) | — |
+| ADR-002 | VAD choice and segmentation settings | **ACCEPTED** | 2026-10-03 |
+| ADR-003 | Auto-accept policy (on/off, rules) | **ACCEPTED** (auto-accept OFF for v1) | 2026-10-03 |
 | ADR-004 | Ratification of PROVISIONAL targets in `prd.md` §13 | **ACCEPTED** (AC-4/6/8 ratified; AC-5 amended) | 2026-10-03 |
 | ADR-005 | Packaging mode (one-folder vs one-file) | PENDING (Phase 6) | — |
 
@@ -288,6 +304,28 @@ Record dead ends so they are not repeated.
 - Consequences: `prd.md` §13 updated accordingly. Fast Mode stays confirm-only until ADR-003 produces a validated rule. Usability progress is tracked as reported metrics from the trial rather than a pass/fail numeric gate.
 - Residual risks: with no numeric usability bar, the interaction burden (one confirmation per number) must be watched closely in the 6.4 trial; if the burden proves unacceptable, the correct response is better recognition accuracy (parser/ASR work), never relaxing AC-4.
 - Approved by (user): "Amend AC-5" option selected at the Phase 5C gate, 2026-10-03.
+
+### ADR-002: VAD choice and segmentation settings (resolves pending decision P3)
+- Date: 2026-10-03
+- Status: Accepted
+- Context: EXP-001 showed the baseline EnergyVAD (500 RMS / 700 ms hangover) merging utterances on the continuous Dad recording because the phone channel's ambient floor (450–550 RMS) sits at the 500 threshold. P3 required an evidence-based choice of VAD implementation and timings (architecture.md §5 [BENCH]).
+- Options considered: retain EnergyVAD with current defaults; adopt measured alternative defaults (higher threshold and/or shorter hangover); adopt a heavier detector (Silero-VAD / ONNX).
+- Evidence: EXP-006 — 24-config grid (thresholds 450–1000 × hangovers 350–1000 ms) scored against 57 ground-truth speech intervals on `dad_continuous_16k.wav` (`analysis/vad_calibration.csv`). Missed utterances = 0 in all configs. Baseline 500/700: 19 segments, 1 clean, 49 merged, 16 cap hits. Best isolation 1000/350: 40 clean, 2 splits, 15 merges, 0 cap hits, 5 false triggers. Failure-mode asymmetry: merging → safe parser rejections; splitting → partial numbers with possible wrong additive sums.
+- Decision: **Retain EnergyVAD with the current defaults (threshold 500.0 RMS, pre-roll 250 ms, hangover 700 ms, min 250 ms, max 6000 ms) as quiet-room defaults.** Silero-VAD is not adopted (0 missed utterances everywhere; the observed failures are threshold-placement issues, not detector-capacity limits — dependency unjustified). No `config.py` changes. Adopted operational rule: **deployment threshold must be ≥ ~2× the measured ambient floor of the environment**; when floor ≈ threshold the system degrades to merging/cap hits (safe but unusable).
+- Consequences: the 700 ms hangover is retained deliberately — its failure mode (merging) is safer than short-hangover splitting, and it bridges intra-phrase pauses (Phase 3.8 evidence). The absolute 500 RMS value is validated only for quiet-room conditions; noisy environments require raising the threshold per the floor-margin rule (config-supported, no code change). False-trigger growth at high thresholds (≤5 per session on noisy input) is contained by min-utterance filtering and safe rejection.
+- Residual risks / follow-up: measured on one phone recording, not the target laptop mic; **live-mic floor measurement and threshold verification are mandatory at the Phase 6.4 trial** before final sign-off. Splitting risk at intra-number pauses with hangover < 500 ms is documented and avoided by retaining 700 ms.
+- Approved by (user): user directive to proceed with Phase 5D, 2026-10-03.
+
+### ADR-003: Auto-accept policy (resolves pending decision P4)
+- Date: 2026-10-03
+- Status: Accepted
+- Context: P4 asked whether any auto-accept rule can achieve 0 false additions (the primary safety metric, AC-4). research.md §9 policy: a rule is eligible only if it yields 0 wrong among accepted on calibration data AND re-evaluates unchanged on a held-out test split (≥500, uncollected — Phase 4E cancelled).
+- Options considered: confidence-threshold rule (R-CONF); energy rule (R-RMS); dual-engine agreement rule (R-AGREE); keep confirm-all.
+- Evidence: EXP-007 (`analysis/auto_accept_signals.csv`, N=61): R-CONF rejected — Vosk word-level confidence fully overlaps between correct (med 1.000) and wrong (med 1.000) values; wrong recognitions are confidently wrong; no threshold reaches 0 wrong among accepted. R-RMS rejected — distributions overlap; 0-wrong cells exist only at coverage ≤3 utterances. R-AGREE measured 28/61 auto-accepted with 0 wrong (95% upper bound ~10.7% per rule of three) — promising but statistically insufficient and not test-split-validated; would also double runtime cost (two engines per utterance) and RAM.
+- Decision: **Auto-accept remains disabled for v1 (`AUTO_ACCEPT_ENABLED = False` unchanged). Safe Mode confirm-all is the shipping policy.** Fast Mode stays available in the GUI but deterministically requires manual confirmation for every candidate (uncalibrated confidence forces it structurally). R-AGREE is recorded as the sole future candidate and requires: a proper calibration split, a held-out test split (≥500 utterances), and ADR-005-scope cost analysis before any reconsideration.
+- Consequences: AC-4 (0 false additions) is enforced structurally by confirm-all, consistent with ADR-004. The interaction burden (one confirmation per number) is the accepted cost of safety; its acceptability is measured (not gated) at the Phase 6.4 trial per ADR-004's amended AC-5. `decision.py` requires no changes — the gating logic already implements this policy.
+- Residual risks: if the 6.4 trial shows the confirmation burden is unacceptable, the remedy is accuracy work (parser/ASR) or the R-AGREE path with new data — never disabling confirmation without a validated rule.
+- Approved by (user): user directive to proceed with Phase 5D, 2026-10-03.
 
 ## 13. Long-Session Stability Record (template)
 
