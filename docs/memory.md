@@ -7,18 +7,20 @@
 
 ## 1. Project Status
 
-- **Overall status:** Phase 6.1 (Long-Session Soak) completed. **AC-8 PASS** (0 crashes, ~0 memory growth, 646/646 utterances over 60 min). 440 unit/mock/integration tests passing, 1 model-dependent test cleanly skipped.
+- **Overall status:** Phase 6.2 (Error Matrix Verification) completed — all 7 prd.md §9 error conditions verified with total/history preservation (AC-11). 449 unit/mock/integration tests passing, 1 model-dependent test cleanly skipped.
 - **Last updated:** 2026-10-03
 
 ## 2. Current Phase
 
-- Phase: **Phase 6 — Reliability Testing, Packaging & Trial** (Subtask 6.1 completed).
+- Phase: **Phase 6 — Reliability Testing, Packaging & Trial** (Subtasks 6.1–6.2 completed).
 
 ## 3. Current Task
 
-- Phase 6.1 completed. Next: Phase 6.2 (Error Matrix Verification).
+- Phase 6.2 completed. Next: Phase 6.3 (Windows Packaging, P9).
 
 ## 4. Completed Work
+
+- [6.2 Error Matrix Verification] Built the full prd.md §9 verification matrix (`analysis/error_matrix.md`): all 7 error situations triggered deterministically via fakes/mocks with total/history preservation asserted (AC-11). Audit exposed 3 genuine spec gaps, closed minimally with regression tests: (1) typed mic-start errors — `MicNotFound`/`MicBusy` at `source.start()` now surface as typed ERROR events instead of "Unexpected background error", enabling the GUI to show the exact prd-mandated plain messages (`controller.py`); (2) model-missing now **disables Start** while Undo/Reset remain usable, per prd (`gui/app.py`); (3) the prd-mandated **5-consecutive-recognition-failure stop** was never enforced — `MAX_CONSECUTIVE_RECOGNITION_ERRORS` existed only in config; the controller now stops the session after 5 consecutive `ASR_ERROR` decisions with a plain restart-guidance message, counter resetting on success (`controller.py`). New plain-language error-event mapping added to `gui/messages.py` (`ERROR_EVENT_MESSAGES`/`get_error_event_message`). 9 new tests (4 controller, 5 GUI); suite 449 passed / 1 skipped. Hardware-level variants (physical unplug, real privacy toggle, model deletion on packaged build) deferred to the 6.4 manual trial.
 
 - [6.1 Long-Session Soak Test] Built `tools/soak_test.py` (stdlib-only, no new dependencies): runs the full production stack (Tkinter GUI + ListeningController + EnergyVAD 500/700 defaults + real Vosk ASR + Safe Mode decision engine) against a real-time-paced scripted loop of the Dad continuous recording (no microphone opened, privacy-safe), with a deterministic main-thread auto-responder (Add / every-4th Discard) exercising the confirmation surface. Monitors: RSS (WinAPI `GetProcessMemoryInfo`), CPU utilization, event-queue depth, GUI event-loop stall probe (100 ms after() lateness with per-event >100 ms logging), decision throughput vs expected utterances, audio pace lag. Two harness bugs found and fixed during a 3-min validation run (inverted pacing sleep; truncated 64-bit pseudo-handle in the RSS probe) — no app changes. **Full 60-min run (EXP-008): 0 crashes, 0 exceptions, 0 ERROR events; 646/646 utterances produced decisions (0 missed); max queue depth 2; CPU avg 1.95%; RSS 181.8 -> 89.4 -> 75.8 MB (shrank ~106 MB, growth ≈ 0 — well within AC-8's 50 MB); 12 GUI stalls >100 ms in 60 min, max 181 ms, scattered (background-process scheduling on an actively used desktop; architecture has no main-thread blocking work).** AC-8 = PASS; AC-7 flagged for foreground re-verification at the Phase 6.4 trial. Results in `analysis/soak_summary.json`, `analysis/soak_samples.csv`; record in `docs/research.md` §13.
 
@@ -128,8 +130,8 @@
 
 ## 9. Test Status
 
-- Automated tests: **440 passed, 1 skipped, 0 failed** (`pytest`).
-- Last test command/result: `.\.venv\Scripts\pytest.exe` -> 440 passed, 1 skipped in 11.39s (test_asr_base: 7, test_audio_capture: 9, test_benchmark: 23, test_calculator: 31, test_config: 5, test_controller: 13, test_decision: 34, test_gui: 43, test_logging: 3, test_numparse_cases: 189, test_numparse_exhaustive: 10, test_pipeline: 15, test_segmenter: 13, test_smoke: 2, test_vad: 8, test_vosk_engine: 11, test_wavio: 10, test_whisper_engine: 14 passed + 1 skipped).
+- Automated tests: **449 passed, 1 skipped, 0 failed** (`pytest`).
+- Last test command/result: `.\.venv\Scripts\pytest.exe` -> 449 passed, 1 skipped in 21.79s (test_asr_base: 7, test_audio_capture: 9, test_benchmark: 23, test_calculator: 31, test_config: 5, test_controller: 17, test_decision: 34, test_gui: 48, test_logging: 3, test_numparse_cases: 189, test_numparse_exhaustive: 10, test_pipeline: 15, test_segmenter: 13, test_smoke: 2, test_vad: 8, test_vosk_engine: 11, test_wavio: 10, test_whisper_engine: 14 passed + 1 skipped).
 
 ## 10. Benchmark Status
 
@@ -170,6 +172,8 @@
 - Soak-test instruments measure the *environment* as much as the app: a background-process GUI stall probe records OS scheduling lateness (12 events, max 181 ms/hour on an actively used desktop) that foreground use would not see. AC-7 verdicts must come from foreground measurements (Phase 6.4).
 - Windows RSS via ctypes needs explicit `restype`/`argtypes` (c_void_p handle) — the default int restype truncates the GetCurrentProcess pseudo-handle on 64-bit Python and GetProcessMemoryInfo fails with ERROR_INVALID_HANDLE.
 - Long-run working set can SHRINK as the OS pages out cold model pages (181.8 -> 75.8 MB over 60 min); memory-growth assessments must use the trend, not the absolute value.
+- Error-recovery wording is a product requirement, not a nicety: prd.md §9 specifies exact plain-language messages and button states per error. Routing controller ERROR events through a typed `error_type` -> message map in `messages.py` keeps GUI text spec-compliant and testable.
+- Error-recovery limiters defined in config (e.g. `MAX_CONSECUTIVE_RECOGNITION_ERRORS`) must be wired into the controller with regression tests — a config constant alone enforces nothing.
 
 ## 12. Dependencies Added (with justification)
 
@@ -183,7 +187,7 @@
 
 ## 13. Next Task
 
-- **Phase 6.2**: Error Matrix Verification — trigger and verify recovery from every error condition in `prd.md` §9 (mic disconnect, malformed speech, model missing, etc.) with tests/manual matrix; total/history preserved per AC-11.
+- **Phase 6.3**: Windows Packaging (P9) — PyInstaller one-folder build spec bundling models and the offline runtime; verify startup on a clean profile (`build_spec/`, `README.md`).
 
 ## 15. Do Not Change Casually (requires explicit user approval)
 

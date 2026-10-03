@@ -32,6 +32,7 @@ from voice_calculator.gui.messages import (
     UIState,
     format_number,
     get_decision_feedback_message,
+    get_error_event_message,
 )
 from voice_calculator.pipeline import PipelineResult
 
@@ -364,9 +365,13 @@ class VoiceCalculatorApp:
 
         elif event.event_type == ControllerEventType.ERROR:
             self._clear_pending_confirmation()
-            err_msg = event.error_message or "An unexpected error occurred."
+            err_msg = get_error_event_message(event.error_type, event.error_message)
             self.set_state(UIState.ERROR, custom_text=err_msg)
             self.lbl_feedback.configure(text=err_msg)
+            if event.error_type == "ModelMissingError":
+                # prd.md §9: with the model missing, Start cannot succeed —
+                # disable it; Undo/Reset remain usable.
+                self.btn_start.configure(state=tk.DISABLED)
 
     def set_state(self, new_state: UIState, custom_text: Optional[str] = None) -> None:
         """Updates the high-level GUI state and refreshes indicators."""

@@ -24,7 +24,7 @@ import numpy as np
 import pytest
 
 from voice_calculator.asr.base import ASRResult, ASRStatus, FakeEngine, ModelMissingError
-from voice_calculator.audio.capture import AudioError, AudioFrame, FakeAudioSource
+from voice_calculator.audio.capture import AudioError, AudioFrame, FakeAudioSource, MicNotFound
 from voice_calculator.audio.segmenter import UtteranceSegmenter
 from voice_calculator.audio.vad import EnergyVAD
 from voice_calculator.config import AUDIO_BLOCK_BYTES, AUDIO_BLOCK_DURATION_MS, AUDIO_SAMPLE_RATE
@@ -459,3 +459,175 @@ class TestControllerRecoveryReliability:
         assert decision.value is None
         assert decision.reason == DecisionReason.ASR_ERROR
         assert "Simulated decoder crash" in decision.explanation
+
+
+class TestErrorMatrixRecovery:
+    """Phase 6.2: prd.md §9 error-matrix recovery verification at controller level."""
+
+    def test_mic_not_found_at_start_emits_typed_error(self):
+        """MicNotFound at source start surfaces as a typed ERROR event and a clean stop."""
+        class NoMicSource(FakeAudioSource):
+            def start(self) -> None:
+                raise MicNotFound("No default microphone configured on system.")
+
+        controller = ListeningController(
+            engine=FakeEngine(),
+            audio_source_factory=lambda: NoMicSource(),
+        )
+
+        assert controller.start() is True  # Worker starts, then fails fast
+
+        event = controller.event_queue.get(timeout=1.0)
+        assert event.event_type == ControllerEventType.ERROR
+        assert event.error_type == "MicNotFound"
+        assert "No default microphone" in (event.error_message or "")
+
+        controller.stop(timeout=1.0)
+        assert controller.is_listening is False
+
+    def test_consecutive_recognition_failures_stop_listening(self):
+        """Five consecutive recognition exceptions emit an ERROR event and stop the worker."""
+        class AlwaysFailingEngine(FakeEngine):
+            def transcribe(self, pcm_data, sample_rate=16000):
+                raise RuntimeError("simulated recognition crash")
+
+        source = FakeAudioSource()
+        for _ in range(6):  # 6 utterances queued; stop must happen after the 5th
+            for f in make_pcm_frames(5, amplitude=2000) + make_silent_frames(5):
+                source._queue.put(f)
+
+        controller = ListeningController(
+            engine=AlwaysFailingEngine(),
+            audio_source_factory=lambda: source,
+            segmenter_factory=lambda: UtteranceSegmenter(vad=EnergyVAD(), hangover_ms=60, min_utterance_ms=60),
+        )
+
+        controller.start()
+
+        events: list[ControllerEvent] = []
+        timeout_end = time.time() + 5.0
+        while time.time() < timeout_end:
+            try:
+                ev = controller.event_queue.get(timeout=0.2)
+                events.append(ev)
+                if ev.event_type == ControllerEventType.ERROR:
+                    break
+            except queue.Empty:
+                pass
+
+        error_event = next(e for e in events if e.event_type == ControllerEventType.ERROR)
+        decisions_before_error = [
+            e for e in events if e.event_type == ControllerEventType.DECISION
+        ]
+
+        assert error_event.error_type == "RepeatedRecognitionFailure"
+        assert "Listening stopped" in (error_event.error_message or "")
+        assert len(decisions_before_error) == 5  # prd.md §9: 5 consecutive failures
+        assert all(
+            e.decision.decision == DecisionType.REPEAT
+            and e.decision.reason == DecisionReason.ASR_ERROR
+            for e in decisions_before_error
+        )
+
+        controller.stop(timeout=1.0)
+        assert controller.is_listening is False
+
+        # No further processing after the stop (6th utterance never decided)
+        time.sleep(0.3)
+        drained: list[ControllerEvent] = []
+        while True:
+            try:
+                drained.append(controller.event_queue.get_nowait())
+            except queue.Empty:
+                break
+        assert all(e.event_type != ControllerEventType.DECISION for e in drained)
+
+    def test_consecutive_failure_counter_resets_on_success(self):
+        """A successful recognition resets the streak: 4 failures + 1 success + 5 failures."""
+        class ScriptedFlakyEngine(FakeEngine):
+            def __init__(self) -> None:
+                super().__init__(default_text="twenty")
+                self.calls = 0
+
+            def transcribe(self, pcm_data, sample_rate=16000):
+                self.calls += 1
+                if self.calls <= 4 or self.calls > 5:
+                    raise RuntimeError("simulated recognition crash")
+                return super().transcribe(pcm_data, sample_rate=sample_rate)
+
+        source = FakeAudioSource()
+        for _ in range(11):
+            for f in make_pcm_frames(5, amplitude=2000) + make_silent_frames(5):
+                source._queue.put(f)
+
+        controller = ListeningController(
+            engine=ScriptedFlakyEngine(),
+            audio_source_factory=lambda: source,
+            segmenter_factory=lambda: UtteranceSegmenter(vad=EnergyVAD(), hangover_ms=60, min_utterance_ms=60),
+        )
+
+        controller.start()
+
+        decisions = 0
+        got_error = False
+        timeout_end = time.time() + 6.0
+        while time.time() < timeout_end:
+            try:
+                ev = controller.event_queue.get(timeout=0.2)
+                if ev.event_type == ControllerEventType.DECISION:
+                    decisions += 1
+                elif ev.event_type == ControllerEventType.ERROR:
+                    got_error = True
+                    break
+            except queue.Empty:
+                pass
+
+        controller.stop(timeout=1.0)
+
+        assert got_error
+        assert decisions == 10  # 4 failures + 1 success (reset) + 5 failures
+
+    def test_segmenter_exception_keeps_listening(self):
+        """An unexpected segmenter exception is contained: the session keeps processing."""
+        class FlakySegmenter(UtteranceSegmenter):
+            def __init__(self, **kwargs) -> None:
+                super().__init__(**kwargs)
+                self._raised = False
+
+            def process_frame(self, frame):
+                if not self._raised:
+                    self._raised = True
+                    raise RuntimeError("simulated segmenter crash")
+                return super().process_frame(frame)
+
+        fake_engine = FakeEngine(
+            scripted_results=[ASRResult(text="one hundred fifty", confidence=0.9, status=ASRStatus.SUCCESS)]
+        )
+        source = FakeAudioSource()
+        for f in make_pcm_frames(5, amplitude=2000) + make_silent_frames(5):
+            source._queue.put(f)
+
+        controller = ListeningController(
+            engine=fake_engine,
+            audio_source_factory=lambda: source,
+            segmenter_factory=lambda: FlakySegmenter(vad=EnergyVAD(), hangover_ms=60, min_utterance_ms=60),
+        )
+
+        controller.start()
+
+        decision_event = None
+        timeout_end = time.time() + 3.0
+        while time.time() < timeout_end:
+            try:
+                ev = controller.event_queue.get(timeout=0.2)
+                if ev.event_type == ControllerEventType.DECISION:
+                    decision_event = ev
+                    break
+            except queue.Empty:
+                pass
+
+        controller.stop(timeout=1.0)
+
+        assert decision_event is not None, "Worker died after segmenter exception"
+        assert decision_event.decision is not None
+        assert decision_event.decision.value == 150  # Later utterance still processed

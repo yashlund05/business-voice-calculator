@@ -42,6 +42,26 @@ STATE_TEXTS = {
 }
 
 
+# Plain-language messages for controller ERROR events, keyed by error type (prd.md §9)
+ERROR_EVENT_MESSAGES = {
+    "MicNotFound": "No microphone found. Plug in or enable a microphone, then press Start.",
+    "MicBusy": "Microphone is in use or blocked. Check Windows microphone privacy settings, then press Start.",
+    "MicLost": "Microphone was disconnected. Listening stopped — check the microphone and press Start.",
+    "StreamError": "Microphone stream error. Please press Start to try again.",
+}
+
+
+def get_error_event_message(error_type: Optional[str], fallback: Optional[str]) -> str:
+    """Returns the plain-language message for a controller ERROR event.
+
+    Typed audio/model errors map to their prd.md §9 wording; other errors show
+    the controller-provided description (or a generic message).
+    """
+    if error_type and error_type in ERROR_EVENT_MESSAGES:
+        return ERROR_EVENT_MESSAGES[error_type]
+    return fallback or "An unexpected error occurred."
+
+
 def format_number(val: Optional[int]) -> str:
     """Formats an integer with thousands separator (e.g. 12450 -> '12,450')."""
     if val is None:

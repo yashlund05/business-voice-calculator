@@ -132,6 +132,6 @@ Debug variant: `Follow docs/rules.md. Bug: [symptom + steps]. Write a failing re
 | Subtask | Tasks | Files | Status |
 |---|---|---|---|
 | 6.1 Long-Session Soak | 60-minute continuous listening soak test verifying bounded memory RSS, CPU stability, and zero GUI event stalls | `tools/`, `docs/research.md` | **DONE** (EXP-008: AC-8 PASS; AC-7 re-verify in foreground at 6.4) |
-| 6.2 Error Matrix Verification | Trigger and verify recovery from all error conditions in `prd.md` §9 (mic disconnect, malformed speech, model missing) | `tests/`, `docs/memory.md` | **PLANNED** |
+| 6.2 Error Matrix Verification | Trigger and verify recovery from all error conditions in `prd.md` §9 (mic disconnect, malformed speech, model missing) | `tests/`, `docs/memory.md` | **DONE** (7/7 conditions verified; 3 spec gaps fixed; AC-11; hardware variants deferred to 6.4) |
 | 6.3 Windows Packaging (P9) | PyInstaller one-folder packaging build spec bundling models and offline runtime | `build_spec/`, `README.md` | **PLANNED** |
 | 6.4 Clean-Machine Trial | Verify packaged build on a clean Windows machine without Python; conduct user/father workflow trial | `docs/memory.md` | **PLANNED** |

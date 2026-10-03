@@ -28,7 +28,14 @@ from voice_calculator.asr.vosk_engine import VoskEngine
 from voice_calculator.audio.capture import AudioError, AudioSource, MicrophoneCapture
 from voice_calculator.audio.segmenter import UtteranceSegmenter
 from voice_calculator.audio.vad import EnergyVAD
-from voice_calculator.decision import DecisionResult, OperatingMode, SafetyDecisionEngine
+from voice_calculator.config import MAX_CONSECUTIVE_RECOGNITION_ERRORS
+from voice_calculator.decision import (
+    DecisionReason,
+    DecisionResult,
+    DecisionType,
+    OperatingMode,
+    SafetyDecisionEngine,
+)
 from voice_calculator.pipeline import AudioPipeline, PipelineResult, PipelineStatus
 
 logger = logging.getLogger("voice_calculator.controller")
@@ -207,8 +214,20 @@ class ListeningController:
         logger.info("Worker loop entered (session_id=%d).", session_id)
 
         try:
-            # 1. Start audio source
-            source.start()
+            # 1. Start audio source (typed audio errors surface as plain ERROR events)
+            try:
+                source.start()
+            except AudioError as e:
+                logger.error("Audio source failed to start: %s", type(e).__name__)
+                self.event_queue.put(
+                    ControllerEvent(
+                        event_type=ControllerEventType.ERROR,
+                        session_id=session_id,
+                        error_message=str(e),
+                        error_type=type(e).__name__,
+                    )
+                )
+                return
 
             # 2. Ensure ASR engine is loaded
             try:
@@ -243,6 +262,10 @@ class ListeningController:
                     session_id=session_id,
                 )
             )
+
+            # Consecutive recognition-failure tracking (prd.md §9: repeated
+            # recognition exceptions stop listening with an error message)
+            consecutive_asr_errors = 0
 
             # 3. Continuous frame loop
             while not self._stop_event.is_set():
@@ -312,6 +335,33 @@ class ListeningController:
                             latency_ms=pipe_result.total_latency_ms,
                         )
                     )
+
+                # Stop after repeated recognition exceptions (prd.md §9)
+                if (
+                    decision_res.decision == DecisionType.REPEAT
+                    and decision_res.reason == DecisionReason.ASR_ERROR
+                ):
+                    consecutive_asr_errors += 1
+                    if consecutive_asr_errors >= MAX_CONSECUTIVE_RECOGNITION_ERRORS:
+                        logger.error(
+                            "Recognition failed %d consecutive times; stopping session.",
+                            consecutive_asr_errors,
+                        )
+                        if not self._stop_event.is_set():
+                            self.event_queue.put(
+                                ControllerEvent(
+                                    event_type=ControllerEventType.ERROR,
+                                    session_id=session_id,
+                                    error_message=(
+                                        "Speech recognition failed repeatedly. "
+                                        "Listening stopped — please press Start to try again."
+                                    ),
+                                    error_type="RepeatedRecognitionFailure",
+                                )
+                            )
+                        break
+                else:
+                    consecutive_asr_errors = 0
 
         except Exception as e:
             if not self._stop_event.is_set():

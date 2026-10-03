@@ -963,4 +963,113 @@ class TestMultiNumberAndZeroGui:
         assert gui_app.state == UIState.LISTENING
 
 
+class TestErrorMatrixGui:
+    """Phase 6.2: prd.md §9 error-matrix behavior at GUI level."""
+
+    def test_mic_not_found_shows_plain_message_with_start_available(
+        self, gui_app: VoiceCalculatorApp
+    ):
+        """No-microphone errors show the prd.md §9 wording; Start remains available."""
+        ev = ControllerEvent(
+            event_type=ControllerEventType.ERROR,
+            session_id=gui_app.controller.current_session_id,
+            error_message="No default microphone configured on system.",
+            error_type="MicNotFound",
+        )
+        gui_app._handle_controller_event(ev)
+
+        assert gui_app.state == UIState.ERROR
+        assert (
+            gui_app.lbl_status.cget("text")
+            == "No microphone found. Plug in or enable a microphone, then press Start."
+        )
+        assert gui_app.btn_start.cget("state") == tk.NORMAL
+
+    def test_mic_busy_shows_privacy_settings_message(self, gui_app: VoiceCalculatorApp):
+        """Mic-in-use/permission errors point to Windows microphone privacy settings."""
+        ev = ControllerEvent(
+            event_type=ControllerEventType.ERROR,
+            session_id=gui_app.controller.current_session_id,
+            error_message="Microphone is busy or in use: device locked",
+            error_type="MicBusy",
+        )
+        gui_app._handle_controller_event(ev)
+
+        assert "privacy settings" in gui_app.lbl_status.cget("text")
+        assert gui_app.btn_start.cget("state") == tk.NORMAL
+
+    def test_model_missing_disables_start_but_keeps_undo_and_clear(
+        self, gui_app: VoiceCalculatorApp
+    ):
+        """Model-missing errors disable Start; Undo/Reset stay usable (prd.md §9)."""
+        ev = ControllerEvent(
+            event_type=ControllerEventType.ERROR,
+            session_id=gui_app.controller.current_session_id,
+            error_message="A required speech model file is missing. Please install the model in models/ directory.",
+            error_type="ModelMissingError",
+        )
+        gui_app._handle_controller_event(ev)
+
+        assert gui_app.state == UIState.ERROR
+        assert "model" in gui_app.lbl_status.cget("text").lower()
+        assert gui_app.btn_start.cget("state") == tk.DISABLED
+        assert gui_app.btn_stop.cget("state") == tk.DISABLED
+
+        # Undo / Reset remain fully usable
+        gui_app.calculator.add(75)
+        gui_app.refresh_display()
+        gui_app.on_undo()
+        assert gui_app.calculator.total == 0
+        gui_app.calculator.add(30)
+        gui_app.on_clear()
+        assert gui_app.calculator.total == 0
+        assert gui_app.calculator.is_empty
+
+    def test_mic_disconnect_during_listening_preserves_total_and_allows_restart(
+        self, gui_app: VoiceCalculatorApp
+    ):
+        """Mic loss mid-session: total/history intact, Start re-enabled, restart works."""
+        gui_app.on_start()
+        gui_app.calculator.add(120)
+        gui_app.calculator.add(30)
+        gui_app.refresh_display()
+
+        ev = ControllerEvent(
+            event_type=ControllerEventType.ERROR,
+            session_id=gui_app.controller.current_session_id,
+            error_message="Microphone capture error: stream closed",
+            error_type="MicLost",
+        )
+        gui_app._handle_controller_event(ev)
+
+        assert gui_app.state == UIState.ERROR
+        assert "Microphone was disconnected" in gui_app.lbl_status.cget("text")
+        assert gui_app.calculator.total == 150  # 120 + 30 preserved through the error
+        assert gui_app.calculator.count == 2
+        assert gui_app.btn_start.cget("state") == tk.NORMAL
+
+        # Restart after the error begins a fresh listening session
+        gui_app.on_start()
+        assert gui_app.state == UIState.LISTENING
+
+    def test_repeated_recognition_failure_error_shows_restart_guidance(
+        self, gui_app: VoiceCalculatorApp
+    ):
+        """The 5-consecutive-failures error message guides the user to press Start again."""
+        ev = ControllerEvent(
+            event_type=ControllerEventType.ERROR,
+            session_id=gui_app.controller.current_session_id,
+            error_message=(
+                "Speech recognition failed repeatedly. "
+                "Listening stopped — please press Start to try again."
+            ),
+            error_type="RepeatedRecognitionFailure",
+        )
+        gui_app._handle_controller_event(ev)
+
+        assert gui_app.state == UIState.ERROR
+        assert "press Start" in gui_app.lbl_status.cget("text")
+        assert gui_app.btn_start.cget("state") == tk.NORMAL
+
+
 
