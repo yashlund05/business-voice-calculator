@@ -579,3 +579,82 @@ class TestDecisionReliabilityInvariants:
         assert result.requires_confirmation is True
         assert result.can_auto_add is False
         assert "Zero requires confirmation" in result.explanation
+
+
+MULTI_NUMBER_CORPUS = [
+    "one two three",
+    "one zero",
+    "zero zero",
+    "one thousand one thousand",
+    "two thousand two thousand",
+    "one hundred two hundred",
+    "twenty five fifty",
+    "two two thousand",
+    "five hundred one two",
+]
+
+
+class TestMultiNumberAndZeroPolicy:
+    """Phase 5E: multi-number rejection hardening (P7) and zero rule (P8) invariants."""
+
+    def test_multi_number_corpus_rejected_with_value_masked(self):
+        """Every disconnected multi-number utterance is REJECTed with value masked, in default config."""
+        engine = SafetyDecisionEngine()
+        for phrase in MULTI_NUMBER_CORPUS:
+            res = engine.evaluate(make_pipeline_result(PipelineStatus.PARSER_REJECTED, text=phrase))
+            assert res.decision == DecisionType.REJECT, f"'{phrase}' was not rejected"
+            assert res.value is None, f"Value leaked for '{phrase}'"
+            assert res.requires_confirmation is False
+            assert res.reason == DecisionReason.PARSER_REJECTED_MULTIPLE_NUMBERS, (
+                f"Unexpected reason for '{phrase}': {res.reason}"
+            )
+
+    def test_multi_numbers_rejected_in_fast_mode_with_auto_accept(self):
+        """Fast Mode with auto-accept enabled must still reject multi-number utterances."""
+        config = DecisionConfig(mode=OperatingMode.FAST, auto_accept_enabled=True)
+        engine = SafetyDecisionEngine(config=config)
+        for phrase in MULTI_NUMBER_CORPUS:
+            res = engine.evaluate(
+                make_pipeline_result(PipelineStatus.PARSER_REJECTED, text=phrase, confidence=0.99)
+            )
+            assert res.decision == DecisionType.REJECT, f"'{phrase}' was not rejected in Fast Mode"
+            assert res.value is None
+            assert res.reason == DecisionReason.PARSER_REJECTED_MULTIPLE_NUMBERS
+
+    def test_zero_requires_confirmation_across_all_policy_configurations(self):
+        """Zero requires manual confirmation in every mode/policy combination that auto-adds."""
+        configurations = [
+            # Default Safe Mode
+            DecisionConfig(),
+            # Fast Mode + auto-accept, calibrated confidence far above any threshold
+            DecisionConfig(mode=OperatingMode.FAST, auto_accept_enabled=True, min_confidence=0.90),
+            # Fast Mode + auto-accept, no confidence threshold configured
+            DecisionConfig(mode=OperatingMode.FAST, auto_accept_enabled=True),
+        ]
+        for config in configurations:
+            assert config.zero_requires_confirmation is True, "Default policy flag must stay on"
+            engine = SafetyDecisionEngine(config=config)
+            for conf in (0.99, 0.95, None):
+                pipe_res = make_pipeline_result(
+                    PipelineStatus.PARSED, text="zero", confidence=conf
+                )
+                res = engine.evaluate(pipe_res)
+                assert res.decision == DecisionType.ACCEPT, f"conf={conf}, config={config}"
+                assert res.value == 0
+                assert res.requires_confirmation is True, (
+                    f"Zero must require confirmation (conf={conf}, mode={config.mode})"
+                )
+                assert res.can_auto_add is False, f"Zero must never auto-add (conf={conf})"
+
+    def test_nonzero_values_unaffected_by_zero_rule(self):
+        """The zero rule must not force confirmation of non-zero values in an eligible auto-accept setup."""
+        config = DecisionConfig(mode=OperatingMode.FAST, auto_accept_enabled=True, min_confidence=0.90)
+        engine = SafetyDecisionEngine(config=config)
+        pipe_res = make_pipeline_result(PipelineStatus.PARSED, text="fifty", confidence=0.95)
+
+        res = engine.evaluate(pipe_res)
+
+        assert res.decision == DecisionType.ACCEPT
+        assert res.value == 50
+        assert res.requires_confirmation is False
+        assert res.can_auto_add is True

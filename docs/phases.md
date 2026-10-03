@@ -39,7 +39,7 @@ Debug variant: `Follow docs/rules.md. Bug: [symptom + steps]. Write a failing re
 | **2** | ASR Interface & Prerecorded Audio Baseline | ASREngine protocol, WAV I/O, Vosk baseline, benchmark CLI, transcribe tool | **COMPLETED** |
 | **3** | Full Desktop Architecture Foundation | EnergyVAD, segmenter, pipeline orchestrator, safety decision engine, calculator core, Tkinter GUI, controller, Safe/Fast modes | **COMPLETED** |
 | **4** | Candidate ASR Evaluation & Real Phone Benchmark | 4A FasterWhisperEngine, 4B low-end CPU benchmark on Dad dataset, 4C natural parser expansion + re-benchmark, 4D safety audit, 4E cancelled | **COMPLETED** |
-| **5** | Validation, Error Audit & Safety Calibration | 5A error audit & synthetic stress, 5B confirmation/recovery reliability, 5C ASR ADR (P2), 5D VAD (P3) + auto-accept (P4), 5E multi-number (P7) + zero rule (P8) | **IN PROGRESS** |
+| **5** | Validation, Error Audit & Safety Calibration | 5A error audit & synthetic stress, 5B confirmation/recovery reliability, 5C ASR ADR (P2) + target ratification (P5), 5D VAD (P3) + auto-accept (P4), 5E multi-number (P7) + zero rule (P8) | **COMPLETED** |
 | **6** | Reliability Testing, Packaging & Trial | Long-session soak, error matrix, PyInstaller one-folder packaging (P9), real-world trial | **PLANNED** |
 
 ---
@@ -121,7 +121,7 @@ Debug variant: `Follow docs/rules.md. Bug: [symptom + steps]. Write a failing re
 | **5B Confirmation & Recovery Reliability** | Comprehensive invariant testing of GUI confirmation, Discard, Undo stack reversibility, and plain-language error messaging under abnormal pipeline events | `tests/test_decision.py`, `tests/test_gui.py`, `tests/test_controller.py` | **DONE** |
 | **5C ASR Model ADR (P2)** | Formalize Architecture Decision Record (ADR-001) in `docs/research.md` comparing Vosk baseline vs faster-whisper on low-end CPU hardware constraints | `docs/research.md`, `docs/memory.md` | **DONE** (ADR-001 + ADR-004 accepted) |
 | **5D VAD Calibration (P3) & Auto-Accept Rules (P4)** | Evaluate VAD hangover/threshold trade-offs on existing dataset; analyze confidence distributions to determine if any auto-accept rule can achieve 0 false additions | `src/voice_calculator/audio/vad.py`, `decision.py`, `docs/research.md` | **DONE** (ADR-002 + ADR-003 accepted; defaults retained per evidence) |
-| **5E Multi-Number (P7) & Zero Rule (P8)** | Verify multi-number rejection hardening (`RejectReason.MULTIPLE_NUMBERS`) and enforce zero confirmation rule (`zero` always requires confirmation) | `src/voice_calculator/numparse.py`, `decision.py`, tests | **PLANNED** |
+| **5E Multi-Number (P7) & Zero Rule (P8)** | Verify multi-number rejection hardening (`RejectReason.MULTIPLE_NUMBERS`) and enforce zero confirmation rule (`zero` always requires confirmation) | `src/voice_calculator/numparse.py`, `decision.py`, tests | **DONE** (P7/P8 verified & resolved; no src changes needed) |
 
 ---
 

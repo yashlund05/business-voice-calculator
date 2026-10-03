@@ -221,6 +221,22 @@ def test_accepted_cases(phrase: str, expected_val: int):
         ("one zero", RejectReason.MULTIPLE_NUMBERS),
         ("forty five fifty", RejectReason.MULTIPLE_NUMBERS),
         ("one hundred two hundred", RejectReason.MULTIPLE_NUMBERS),
+        # Phase 5E (P7) hardening: concatenations of otherwise-valid compounds
+        # must never evaluate to a single number (e.g. 1000+1000 -> 2000)
+        ("one thousand one thousand", RejectReason.MULTIPLE_NUMBERS),
+        ("two thousand two thousand", RejectReason.MULTIPLE_NUMBERS),
+        ("twenty five fifty", RejectReason.MULTIPLE_NUMBERS),
+        ("one hundred fifty twenty", RejectReason.MULTIPLE_NUMBERS),
+        ("two two thousand", RejectReason.MULTIPLE_NUMBERS),
+        ("five hundred one two", RejectReason.MULTIPLE_NUMBERS),
+        ("one hundred one hundred", RejectReason.MULTIPLE_NUMBERS),
+        ("fifteen twenty five", RejectReason.MULTIPLE_NUMBERS),
+        # Phase 5E (P7) hardening: multi-tens sequences (verified behavior)
+        ("ten twenty thirty forty", RejectReason.MALFORMED),
+        ("ninety eighty seventy sixty", RejectReason.MALFORMED),
+        # Phase 5E (P7) hardening: grammatical concatenation overflowing the range
+        ("two thousand five hundred", RejectReason.OUT_OF_RANGE),
+        ("one two hundred", RejectReason.MALFORMED),
     ],
 )
 def test_rejected_cases(phrase: str, expected_reason: RejectReason):

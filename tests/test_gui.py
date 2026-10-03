@@ -921,4 +921,46 @@ class TestPlainLanguageErrorMessages:
         assert format_number(12450) == "12,450"
 
 
+class TestMultiNumberAndZeroGui:
+    """Phase 5E: GUI behavior for multi-number rejections (P7) and zero confirmation (P8)."""
+
+    def test_multi_number_utterance_rejected_leaves_total_untouched(
+        self, gui_app: VoiceCalculatorApp
+    ):
+        """A spoken multi-number utterance flows to REJECT with a friendly message and no addition."""
+        gui_app.on_start()
+        gui_app.calculator.add(100)
+        gui_app.refresh_display()
+
+        pipe_res = make_pipeline_result(PipelineStatus.PARSER_REJECTED, text="one two three")
+        gui_app.process_pipeline_result(pipe_res)
+
+        assert gui_app.calculator.total == 100  # Unchanged
+        assert gui_app.calculator.count == 1
+        assert gui_app.pending_candidate is None
+        assert "Didn't catch that" in gui_app.lbl_feedback.cget("text")
+
+    def test_zero_requires_confirmation_and_is_never_auto_added(
+        self, gui_app: VoiceCalculatorApp
+    ):
+        """Spoken zero goes through the confirmation prompt, never straight into the total."""
+        gui_app.on_start()
+
+        pipe_res = make_pipeline_result(PipelineStatus.PARSED, text="zero")
+        gui_app.process_pipeline_result(pipe_res)
+
+        # Zero must land in the confirmation prompt, not the total
+        assert gui_app.state == UIState.AWAITING_CONFIRMATION
+        assert gui_app.pending_candidate is not None
+        assert gui_app.pending_candidate.value == 0
+        assert gui_app.calculator.total == 0
+        assert gui_app.calculator.count == 0
+
+        # User confirms: arithmetically a no-op but explicitly user-approved
+        gui_app.on_confirm_add()
+        assert gui_app.calculator.total == 0
+        assert gui_app.calculator.count == 1
+        assert gui_app.state == UIState.LISTENING
+
+
 

@@ -7,18 +7,20 @@
 
 ## 1. Project Status
 
-- **Overall status:** Phase 5D (VAD Calibration & Auto-Accept Rules) completed. 422 unit/mock/integration tests passing, 1 model-dependent test cleanly skipped (100% pass rate). Zero false additions invariant intact.
+- **Overall status:** Phase 5E (Multi-Number Rejection & Zero Rule) completed — **Phase 5 fully complete**. 440 unit/mock/integration tests passing, 1 model-dependent test cleanly skipped (100% pass rate). Zero false additions invariant intact.
 - **Last updated:** 2026-10-03
 
 ## 2. Current Phase
 
-- Phase: **Phase 5 — Validation, Error Audit & Safety Calibration** (Subtasks 5A–5D completed).
+- Phase: **Phase 5 — Validation, Error Audit & Safety Calibration (COMPLETED)**. Next phase: Phase 6 — Reliability Testing, Packaging & Trial.
 
 ## 3. Current Task
 
-- Phase 5D completed. Next: Phase 5E (Multi-Number Rejection P7 & Zero Rule P8).
+- Phase 5E completed. Next: Phase 6.1 (Long-Session Soak Test).
 
 ## 4. Completed Work
+
+- [5E Multi-Number Rejection (P7) & Zero Rule (P8)] Verified hardening with 18 new invariant tests; no production code changes needed (existing behavior correct). (1) P7: parser rejection corpus extended with 12 adversarial cases — concatenations of otherwise-valid compounds ("one thousand one thousand", "two thousand two thousand", "one hundred one hundred"), disconnected sequences, and range-overflowing grammatical concatenations ("two thousand five hundred" → OUT_OF_RANGE) — all rejected with value=None; verified the parser never mis-merges valid compounds into a single number. Decision layer: multi-number corpus sweep rejected with `PARSER_REJECTED_MULTIPLE_NUMBERS` and masked value in both Safe Mode and Fast Mode + auto-accept. GUI: multi-number rejection leaves total/history untouched with a friendly message. (2) P8: zero requires manual confirmation in every policy configuration sweep (Safe Mode default; Fast Mode + auto-accept with calibrated confidence meeting min_confidence; Fast Mode with uncalibrated confidence) — `can_auto_add` is False for zero in all combinations, while non-zero values remain eligible for auto-add in an eligible setup (no over-blocking). GUI: spoken "zero" lands in the confirmation prompt, never silently in the total. P7 and P8 resolved.
 
 - [5D VAD Calibration (P3) & Auto-Accept Rules (P4)] Ran EXP-006 and EXP-007 (no production code changes; config defaults retained per evidence).
   * EXP-006 (`tools/calibrate_vad.py`, `analysis/vad_calibration.csv`): 24-config grid (thresholds 450–1000 RMS x hangovers 350–1000 ms) on `dad_continuous_16k.wav` scored against 57 ground-truth speech intervals parsed from the error-audit notes. Missed utterances = 0 in all configs. Recording noise floor (p25=488, p50=862 RMS) sits at the 500 threshold, explaining EXP-001 merging/cap hits (baseline 500/700: 1 clean, 49 merged, 16 cap hits); best isolation 1000/350 (40 clean, 2 split, 15 merged, 0 cap). Failure-mode asymmetry established: merging is safe (parser rejections), splitting is riskier (partial numbers). ADR-002 accepted: EnergyVAD retained with current defaults for quiet room; Silero not adopted; adopted rule — deployment threshold must be >= ~2x measured ambient floor; live-mic verification deferred to Phase 6.4 trial.
@@ -101,6 +103,8 @@
 | 26 | ADR-004 (P5): AC-4, AC-6, AC-8 ratified as written; AC-5 amended to "measured and reported at the Phase 6.4 trial" — the absolute ≤20% confirm+reject bar is unattainable under confirm-all (100% by construction; even the 73.8% oracle union < the 80% auto-add accuracy it implied). AC-4 is never relaxed to compensate for usability | 2026-10-03 | `research.md` §12 ADR-004 (user-selected "Amend AC-5") |
 | 27 | ADR-002 (P3): EnergyVAD retained with current defaults (500 RMS / 250ms pre-roll / 700ms hangover / 250ms min / 6000ms max) as quiet-room defaults; Silero not adopted (0 missed utterances across 24-config grid; failures are threshold-placement issues); operational rule: deployment threshold ≥ ~2× measured ambient floor; live-mic verification at Phase 6.4 | 2026-10-03 | `research.md` §12 ADR-002, EXP-006 |
 | 28 | ADR-003 (P4): Auto-accept remains disabled for v1; confirm-all is the shipping policy. R-CONF and R-RMS rejected (no separation: wrong values are confidently wrong, med word-conf 1.000); R-AGREE (dual-engine same-value agreement: 28/61, 0 wrong, bound ~10.7%) deferred pending calibration+held-out test datasets and cost analysis | 2026-10-03 | `research.md` §12 ADR-003, EXP-007 |
+| 29 | P7: Utterances containing multiple disconnected numbers are always rejected (`RejectReason.MULTIPLE_NUMBERS` / documented `AMBIGUOUS`/`MALFORMED` sequence variants) with value masking, in both Safe Mode and Fast Mode; concatenations of valid compounds never evaluate to a single number | 2026-10-03 | Phase 5E verification (parser corpus + decision/GUI invariant tests) |
+| 30 | P8: Spoken zero always requires manual confirmation (`ZERO_REQUIRES_CONFIRMATION = True`); zero can never auto-add in any mode/policy combination, even with calibrated confidence meeting the threshold; non-zero auto-accept eligibility is unaffected | 2026-10-03 | Phase 5E verification (decision/GUI invariant tests) |
 
 ## 7. Pending Decisions
 
@@ -112,8 +116,8 @@
 | P4 | Auto-accept rules/thresholds | **Resolved: auto-accept stays OFF for v1 (ADR-003, 2026-10-03); R-AGREE deferred** | Phase 5D |
 | P5 | Ratify PROVISIONAL targets in `prd.md` §13 | **Resolved: AC-4/6/8 ratified; AC-5 amended (ADR-004, 2026-10-03)** | Phase 5C gate |
 | P6 | Accept natural hundred/thousand forms | **Resolved: Accepted** | Phase 4C |
-| P7 | Multiple numbers per utterance | Reject (`MULTIPLE_NUMBERS`) | Phase 5E |
-| P8 | Zero requires confirmation | Yes (always confirm) | Phase 5E |
+| P7 | Multiple numbers per utterance | **Resolved: always rejected — MULTIPLE_NUMBERS (documented AMBIGUOUS/MALFORMED variants), value masked (2026-10-03)** | Phase 5E |
+| P8 | Zero requires confirmation | **Resolved: Yes — zero always requires manual confirmation in all modes (2026-10-03)** | Phase 5E |
 | P9 | PyInstaller one-folder vs one-file | One-folder | Phase 6.3 |
 
 ## 8. Known Bugs
@@ -122,8 +126,8 @@
 
 ## 9. Test Status
 
-- Automated tests: **422 passed, 1 skipped, 0 failed** (`pytest`).
-- Last test command/result: `.\.venv\Scripts\pytest.exe` -> 422 passed, 1 skipped in 8.20s (test_asr_base: 7, test_audio_capture: 9, test_benchmark: 23, test_calculator: 31, test_config: 5, test_controller: 13, test_decision: 30, test_gui: 41, test_logging: 3, test_numparse_cases: 177, test_numparse_exhaustive: 10, test_pipeline: 15, test_segmenter: 13, test_smoke: 2, test_vad: 8, test_vosk_engine: 11, test_wavio: 10, test_whisper_engine: 14 passed + 1 skipped).
+- Automated tests: **440 passed, 1 skipped, 0 failed** (`pytest`).
+- Last test command/result: `.\.venv\Scripts\pytest.exe` -> 440 passed, 1 skipped in 11.39s (test_asr_base: 7, test_audio_capture: 9, test_benchmark: 23, test_calculator: 31, test_config: 5, test_controller: 13, test_decision: 34, test_gui: 43, test_logging: 3, test_numparse_cases: 189, test_numparse_exhaustive: 10, test_pipeline: 15, test_segmenter: 13, test_smoke: 2, test_vad: 8, test_vosk_engine: 11, test_wavio: 10, test_whisper_engine: 14 passed + 1 skipped).
 
 ## 10. Benchmark Status
 
@@ -174,7 +178,7 @@
 
 ## 13. Next Task
 
-- **Phase 5E**: Multi-number rejection hardening (P7, `RejectReason.MULTIPLE_NUMBERS`) and zero confirmation rule enforcement (P8) — verify existing behavior with dedicated invariant tests, close both pending decisions.
+- **Phase 6.1**: Long-session soak test — 60-minute continuous listening run verifying bounded memory RSS, CPU stability, and zero GUI event stalls (`tools/`, `docs/research.md` §13).
 
 ## 15. Do Not Change Casually (requires explicit user approval)
 
