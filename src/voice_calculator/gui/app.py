@@ -330,6 +330,11 @@ class VoiceCalculatorApp:
             except Exception:
                 pass
 
+    def _clear_pending_confirmation(self) -> None:
+        """Discards any pending confirmation candidate and hides its action buttons."""
+        self.pending_candidate = None
+        self.confirm_buttons_frame.pack_forget()
+
     def _handle_controller_event(self, event: ControllerEvent) -> None:
         """Handles a single event delivered from ListeningController."""
         # Filter out stale events from previous sessions
@@ -342,7 +347,7 @@ class VoiceCalculatorApp:
         if event.event_type == ControllerEventType.STARTED:
             self.set_state(UIState.LISTENING)
             self.lbl_feedback.configure(text="Listening — speak a number between 0 and 2,000.")
-            self.confirm_buttons_frame.pack_forget()
+            self._clear_pending_confirmation()
 
         elif event.event_type == ControllerEventType.PROCESSING:
             self.set_state(UIState.PROCESSING)
@@ -353,10 +358,12 @@ class VoiceCalculatorApp:
                 self.process_decision_result(event.decision)
 
         elif event.event_type == ControllerEventType.STOPPED:
+            self._clear_pending_confirmation()
             self.set_state(UIState.STOPPED)
             self.lbl_feedback.configure(text="Stopped — press Start to listen.")
 
         elif event.event_type == ControllerEventType.ERROR:
+            self._clear_pending_confirmation()
             err_msg = event.error_message or "An unexpected error occurred."
             self.set_state(UIState.ERROR, custom_text=err_msg)
             self.lbl_feedback.configure(text=err_msg)

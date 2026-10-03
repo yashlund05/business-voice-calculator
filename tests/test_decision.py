@@ -9,6 +9,13 @@ Verifies:
 - Zero-value confirmation enforcement.
 - Result immutability and fail-safe handling of unexpected/corrupt inputs.
 - Absolute invariant: zero arithmetic or running total logic in the decision layer.
+
+Phase 5B additions (Confirmation & Recovery Reliability):
+- Defense-in-depth: PARSED status with missing parse value and out-of-range values reaching the
+  engine directly are fail-safely rejected.
+- Value-masking sweep: every abnormal pipeline status and every parser rejection reason yields a
+  decision with value=None and no confirmation requirement.
+- Zero rule enforced under the default Safe Mode policy.
 """
 
 from dataclasses import FrozenInstanceError
@@ -476,3 +483,99 @@ class TestSafetyDecisionEngine:
         res_range = engine.evaluate(make_pipeline_result(PipelineStatus.PARSER_REJECTED, text="five thousand", confidence=0.99))
         assert res_range.decision == DecisionType.REJECT
         assert res_range.value is None
+
+
+class TestDecisionReliabilityInvariants:
+    """Phase 5B: confirmation & recovery reliability invariants of the decision layer."""
+
+    def test_parsed_status_with_null_parse_result_fails_safely(self):
+        """PARSED status with a missing parse result must fail safely to REJECT with no value."""
+        engine = SafetyDecisionEngine()
+        pipe_res = PipelineResult(
+            status=PipelineStatus.PARSED,
+            asr_result=ASRResult(text="fifty", status=ASRStatus.SUCCESS),
+            parse_result=None,
+        )
+
+        result = engine.evaluate(pipe_res)
+
+        assert result.decision == DecisionType.REJECT
+        assert result.value is None
+        assert result.reason == DecisionReason.UNKNOWN_STATUS
+        assert result.requires_confirmation is False
+
+    def test_out_of_range_value_boundary_check_defense_in_depth(self):
+        """Out-of-range values reaching the engine directly (bypassing parser bounds) are rejected."""
+        engine = SafetyDecisionEngine()
+
+        # Above the supported maximum (0-2000)
+        pipe_high = PipelineResult(
+            status=PipelineStatus.PARSED,
+            asr_result=ASRResult(text="five thousand", status=ASRStatus.SUCCESS),
+            parse_result=ParseResult(status=ParseStatus.SUCCESS, value=5000),
+        )
+        res_high = engine.evaluate(pipe_high)
+        assert res_high.decision == DecisionType.REJECT
+        assert res_high.value is None
+        assert res_high.reason == DecisionReason.PARSER_REJECTED_OUT_OF_RANGE
+
+        # Below the supported minimum
+        pipe_negative = PipelineResult(
+            status=PipelineStatus.PARSED,
+            asr_result=ASRResult(text="minus five", status=ASRStatus.SUCCESS),
+            parse_result=ParseResult(status=ParseStatus.SUCCESS, value=-3),
+        )
+        res_negative = engine.evaluate(pipe_negative)
+        assert res_negative.decision == DecisionType.REJECT
+        assert res_negative.value is None
+        assert res_negative.reason == DecisionReason.PARSER_REJECTED_OUT_OF_RANGE
+
+    def test_value_masking_invariant_sweep_all_abnormal_paths(self):
+        """Every abnormal pipeline status and parser rejection reason masks the value to None."""
+        engine = SafetyDecisionEngine()
+
+        # Hardware / ASR / silence / duration / damage paths -> REPEAT with no value
+        repeat_statuses = [
+            PipelineStatus.NO_SPEECH,
+            PipelineStatus.ASR_ERROR,
+            PipelineStatus.SOURCE_ERROR,
+            PipelineStatus.TOO_LONG,
+            PipelineStatus.DAMAGED,
+        ]
+        for status in repeat_statuses:
+            res = engine.evaluate(make_pipeline_result(status, error_message="simulated failure"))
+            assert res.decision == DecisionType.REPEAT, f"Unexpected decision for {status}"
+            assert res.value is None, f"Value leaked for {status}"
+            assert res.requires_confirmation is False, f"Confirmation required for {status}"
+
+        # Every parser rejection reason -> REJECT with no value
+        for reject_reason in RejectReason:
+            pipe_res = PipelineResult(
+                status=PipelineStatus.PARSER_REJECTED,
+                asr_result=ASRResult(text="junk transcript", status=ASRStatus.SUCCESS),
+                parse_result=ParseResult(status=ParseStatus.REJECTED, reason=reject_reason),
+            )
+            res = engine.evaluate(pipe_res)
+            assert res.decision == DecisionType.REJECT, f"Unexpected decision for {reject_reason}"
+            assert res.value is None, f"Value leaked for {reject_reason}"
+            assert res.requires_confirmation is False, f"Confirmation required for {reject_reason}"
+            assert res.reason.name.startswith("PARSER_REJECTED"), (
+                f"Unexpected reason mapping for {reject_reason}"
+            )
+
+    def test_zero_requires_confirmation_in_default_safe_mode(self):
+        """Under the default Safe Mode policy, zero is accepted only with manual confirmation."""
+        engine = SafetyDecisionEngine()
+        pipe_res = make_pipeline_result(
+            status=PipelineStatus.PARSED,
+            text="zero",
+            confidence=None,
+        )
+
+        result = engine.evaluate(pipe_res)
+
+        assert result.decision == DecisionType.ACCEPT
+        assert result.value == 0
+        assert result.requires_confirmation is True
+        assert result.can_auto_add is False
+        assert "Zero requires confirmation" in result.explanation

@@ -7,18 +7,20 @@
 
 ## 1. Project Status
 
-- **Overall status:** Phase 5A (Error Audit & Synthetic Stress Baseline) completed. 394 unit/mock/integration tests passing, 1 model-dependent test cleanly skipped (100% pass rate).
-- **Last updated:** 2026-10-02 by Antigravity
+- **Overall status:** Phase 5B (Confirmation & Recovery Reliability) completed. 422 unit/mock/integration tests passing, 1 model-dependent test cleanly skipped (100% pass rate). Zero false additions invariant intact.
+- **Last updated:** 2026-10-03
 
 ## 2. Current Phase
 
-- Phase: **Phase 5 — Validation, Error Audit & Safety Calibration** (Subtask 5A completed).
+- Phase: **Phase 5 — Validation, Error Audit & Safety Calibration** (Subtasks 5A and 5B completed).
 
 ## 3. Current Task
 
-- Phase 5A completed. Next: Phase 5B (Confirmation & Recovery Reliability).
+- Phase 5B completed. Next: Phase 5C (ASR Model ADR / P2).
 
 ## 4. Completed Work
+
+- [5B Confirmation & Recovery Reliability] Added 28 reliability invariant tests across `tests/test_gui.py` (20), `tests/test_decision.py` (4), and `tests/test_controller.py` (4). Coverage: confirmation guards (double-confirm adds once, double-discard, stale Add/Discard blocked), candidate replacement (newer pending candidate supersedes older; superseded value never added), abnormal-event recovery (ERROR/STOPPED/STARTED events discard pending candidate and hide confirmation buttons; Start re-enabled after errors), full LIFO undo reversibility through the GUI confirm flow with total==sum(history) invariant, plain-language message mapping for every abnormal `DecisionReason` with internal-reason-code leakage checks, keyboard shortcut delivery tests, decision-layer defense-in-depth (PARSED-with-no-value fail-safe, out-of-range boundary check, value-masking sweep over all abnormal statuses and all `RejectReason` values, zero rule in default Safe Mode), and controller recovery (audio factory failure, generic engine-load failure, stop during in-flight ASR discards result, ASR crash contained as REPEAT). Tests exposed a genuine GUI recovery defect: ERROR/STOPPED events left the confirmation prompt and Add/Discard buttons visible with an orphaned pending candidate. Fixed minimally in `src/voice_calculator/gui/app.py` via `_clear_pending_confirmation()` called on STARTED/STOPPED/ERROR events. All 422 tests passing.
 
 - Documentation pack created (`docs/prd.md`, `architecture.md`, `rules.md`, `phases.md`, `design.md`, `memory.md`, `research.md`).
 - [5A Existing-Dataset Error Audit & Synthetic Stress Baseline] Created `tools/audit_errors.py` and `tools/stress_dataset.py`. Classified all 61 eligible Dad baseline utterances into a formal error taxonomy (`analysis/error_audit.csv`, `analysis/error_audit.md`). Verified 100% containment (0/15 wrong values auto-added). Built engine complementarity analysis showing 73.8% oracle upper bound across Vosk and Whisper. Generated 6 synthetic stress variants (tempo 0.9x/1.15x, gain +/-6dB, pink noise SNR 20dB/10dB) and benchmarked both engines (`analysis/stress_comparison.md`, `docs/research.md` EXP-004 and EXP-005). All 394 tests passing. Zero changes in `src/` or `tests/`.
@@ -87,6 +89,7 @@
 | 21 | FasterWhisperEngine integrates faster-whisper (CTranslate2) candidate ASR engine with hardware-aware device/compute configuration; offline local-only operation enforced; uncalibrated scores set confidence=None so Fast Mode strictly requires confirmation; Vosk remains default | 2026-10-02 | Phase 4A implementation |
 | 22 | Deployment philosophy is strictly LOW-END-FIRST: CPU-only execution on older/budget Windows laptops is the primary deployment path; no mandatory GPU/CUDA/RTX; GPU acceleration is an optional optimization only; accuracy and safety must never be compromised for speed; minimum specs must be experimentally measured | 2026-10-02 | Low-End Strategy Directive |
 | 23 | Phase 4E (New Natural-Speed Recordings) is cancelled due to user time constraints; Phase 5 roadmap proceeds using the existing 61-sample Dad baseline dataset and synthetic stress testing | 2026-10-02 | Phase 5.0 Roadmap Directive |
+| 24 | Confirmation UI recovery invariant: any STARTED, STOPPED, or ERROR controller event discards the pending candidate and hides the Add/Discard buttons; confirmation actions are guarded by AWAITING_CONFIRMATION state so stale Add/Discard interactions can never modify the total | 2026-10-03 | Phase 5B implementation |
 
 ## 7. Pending Decisions
 
@@ -108,8 +111,8 @@
 
 ## 9. Test Status
 
-- Automated tests: **394 passed, 1 skipped, 0 failed** (`pytest`).
-- Last test command/result: `.\.venv\Scripts\pytest.exe` -> 394 passed, 1 skipped in 3.59s (test_asr_base: 7, test_audio_capture: 9, test_benchmark: 23, test_calculator: 31, test_config: 5, test_controller: 9, test_decision: 26, test_gui: 21, test_logging: 3, test_numparse_cases: 177, test_numparse_exhaustive: 10, test_pipeline: 15, test_segmenter: 13, test_smoke: 2, test_vad: 8, test_vosk_engine: 11, test_wavio: 10, test_whisper_engine: 14 passed + 1 skipped).
+- Automated tests: **422 passed, 1 skipped, 0 failed** (`pytest`).
+- Last test command/result: `.\.venv\Scripts\pytest.exe` -> 422 passed, 1 skipped in 8.20s (test_asr_base: 7, test_audio_capture: 9, test_benchmark: 23, test_calculator: 31, test_config: 5, test_controller: 13, test_decision: 30, test_gui: 41, test_logging: 3, test_numparse_cases: 177, test_numparse_exhaustive: 10, test_pipeline: 15, test_segmenter: 13, test_smoke: 2, test_vad: 8, test_vosk_engine: 11, test_wavio: 10, test_whisper_engine: 14 passed + 1 skipped).
 
 ## 10. Benchmark Status
 
@@ -143,6 +146,8 @@
 - Missing/uncalibrated confidence must never be treated as evidence of reliability; Fast Mode must safely fall back to manual confirmation when confidence scores are missing or uncalibrated (both Vosk baseline and faster-whisper candidate).
 - Faster-whisper transcript normalization: stripping thousand-separator commas (e.g. "1,500" -> "1500") and converting phrase-pause commas to spaces ensures seamless compatibility with the deterministic number parser without mutating parser grammar.
 - Natural speech grammar expansion (bare `hundred` and `thousand` forms) recovered 6 valid utterances (+9.84% EIA) with zero ML compute overhead, while confirming that acoustic deletions by ASR front-ends require defense-in-depth at the confirmation layer.
+- Confirmation prompts must be explicitly cleared on every abnormal controller event (ERROR, STOPPED) and on session restart (STARTED); state guards alone block stale additions but leave an orphaned "Add N" prompt visible that confuses the user during recovery.
+- Synthetic Tk key events (`event_generate`) are only delivered to viewable windows holding input focus; GUI keyboard-shortcut tests must `deiconify()` + `focus_force()` the root before generating Enter/Escape events.
 
 ## 12. Dependencies Added (with justification)
 
@@ -156,7 +161,7 @@
 
 ## 13. Next Task
 
-- **Phase 5B**: Confirmation and recovery reliability testing (UI recovery, discard/retry flows, undo stack invariants).
+- **Phase 5C**: ASR Model ADR (P2) — formalize ADR-001 in `docs/research.md` comparing Vosk baseline vs faster-whisper on low-end CPU hardware constraints (inputs: Phase 4B/4C benchmarks, EXP-003/004/005, error taxonomy, stress robustness).
 
 ## 15. Do Not Change Casually (requires explicit user approval)
 

@@ -10,7 +10,15 @@ Verifies:
 - Reject and Repeat decisions leave calculator total completely untouched.
 - Undo and Clear operations refresh total and history list.
 - Safety pipeline integration: process_pipeline_result evaluates candidate through SafetyDecisionEngine.
-- Keyboard bindings (Enter -> Add, Esc -> Discard, Ctrl+Z -> Undo).
+- Keyboard bindings (Enter -> Add, Esc to Discard, Ctrl+Z -> Undo).
+
+Phase 5B additions (Confirmation & Recovery Reliability):
+- Confirmation guards: double-confirm, double-discard, stale Add/Discard after state change.
+- Candidate replacement: a newer candidate replaces a pending one; the older value is never added.
+- Abnormal event recovery: ERROR / STOPPED / STARTED events discard any pending candidate and hide
+  the confirmation buttons; Start is re-enabled after errors.
+- Undo stack reversibility through the GUI confirm flow (full LIFO chain, history/total consistency).
+- Plain-language message mapping for every abnormal DecisionReason (no internal reason-code leakage).
 """
 
 import tkinter as tk
@@ -27,7 +35,11 @@ from voice_calculator.decision import (
     SafetyDecisionEngine,
 )
 from voice_calculator.gui.app import VoiceCalculatorApp
-from voice_calculator.gui.messages import UIState
+from voice_calculator.gui.messages import (
+    UIState,
+    format_number,
+    get_decision_feedback_message,
+)
 from voice_calculator.asr.base import FakeEngine
 from voice_calculator.audio.capture import FakeAudioSource
 from voice_calculator.controller import ControllerEvent, ControllerEventType, ListeningController
@@ -461,6 +473,452 @@ class TestVoiceCalculatorGUI:
         gui_app.on_confirm_add()
         assert gui_app.calculator.total == 250
         assert gui_app.pending_candidate is None
+
+
+# ---------------------------------------------------------------------------
+# Phase 5B — Confirmation & Recovery Reliability
+# ---------------------------------------------------------------------------
+
+
+def make_confirm_candidate(value: int) -> DecisionResult:
+    """Helper to build an ACCEPT decision result that requires manual confirmation."""
+    return DecisionResult(
+        decision=DecisionType.ACCEPT,
+        value=value,
+        reason=DecisionReason.ACCEPTED_CANDIDATE,
+        requires_confirmation=True,
+    )
+
+
+@pytest.fixture
+def event_gui_app():
+    """Function-scoped app with its own Tk root so keyboard bindings are isolated per test."""
+    root = tk.Tk()
+    root.withdraw()
+    calc = Calculator()
+    decision_engine = SafetyDecisionEngine()
+    controller = ListeningController(
+        engine=FakeEngine(default_text="one hundred"),
+        audio_source_factory=lambda: FakeAudioSource([]),
+        decision_engine=decision_engine,
+    )
+    app = VoiceCalculatorApp(
+        root=root,
+        calculator=calc,
+        decision_engine=decision_engine,
+        controller=controller,
+    )
+    app.on_clear()
+    app.on_stop()
+    yield app
+    try:
+        root.destroy()
+    except Exception:
+        pass
+
+
+def show_and_focus(app: VoiceCalculatorApp) -> None:
+    """Makes the test window viewable and focused so synthetic key events are delivered.
+
+    Tk only dispatches generated key events to viewable windows that hold input focus.
+    """
+    app.root.deiconify()
+    app.root.focus_force()
+    app.root.update()
+
+
+class TestConfirmationRecoveryReliability:
+    """Phase 5B: confirmation guards, abnormal-event recovery, and undo stack invariants."""
+
+    def test_double_confirm_adds_value_only_once(self, gui_app: VoiceCalculatorApp):
+        """Calling on_confirm_add() twice must add the pending value exactly once."""
+        gui_app.on_start()
+        gui_app.process_decision_result(make_confirm_candidate(150))
+        assert gui_app.state == UIState.AWAITING_CONFIRMATION
+
+        gui_app.on_confirm_add()
+        gui_app.on_confirm_add()  # Stale second Add (double click / repeated Enter)
+
+        assert gui_app.calculator.total == 150
+        assert gui_app.calculator.count == 1
+        assert gui_app.history_listbox.size() == 1
+
+    def test_double_discard_is_safe_no_op(self, gui_app: VoiceCalculatorApp):
+        """Calling on_confirm_discard() twice discards the value exactly once with no side effects."""
+        gui_app.on_start()
+        gui_app.process_decision_result(make_confirm_candidate(500))
+
+        gui_app.on_confirm_discard()
+        gui_app.on_confirm_discard()  # Stale second Discard
+
+        assert gui_app.calculator.total == 0
+        assert gui_app.calculator.count == 0
+        assert gui_app.pending_candidate is None
+        assert gui_app.state == UIState.LISTENING
+
+    def test_confirm_after_discard_is_blocked(self, gui_app: VoiceCalculatorApp):
+        """A stale Add action after Discard must never add the discarded value."""
+        gui_app.on_start()
+        gui_app.process_decision_result(make_confirm_candidate(250))
+        gui_app.on_confirm_discard()
+
+        gui_app.on_confirm_add()  # Stale Add (e.g. late Enter keypress)
+
+        assert gui_app.calculator.total == 0
+        assert gui_app.calculator.count == 0
+
+    def test_discard_after_confirm_is_blocked(self, gui_app: VoiceCalculatorApp):
+        """A stale Discard action after Add must never remove the confirmed value."""
+        gui_app.on_start()
+        gui_app.process_decision_result(make_confirm_candidate(300))
+        gui_app.on_confirm_add()
+        assert gui_app.calculator.total == 300
+
+        gui_app.on_confirm_discard()  # Stale Discard
+
+        assert gui_app.calculator.total == 300
+        assert gui_app.calculator.count == 1
+
+    def test_new_candidate_replaces_pending_without_adding_old(self, gui_app: VoiceCalculatorApp):
+        """A newer candidate replaces a pending one; the superseded value is never added."""
+        gui_app.on_start()
+        gui_app.process_decision_result(make_confirm_candidate(40))
+        assert gui_app.state == UIState.AWAITING_CONFIRMATION
+
+        gui_app.process_decision_result(make_confirm_candidate(60))
+
+        assert gui_app.state == UIState.AWAITING_CONFIRMATION
+        assert gui_app.pending_candidate is not None
+        assert gui_app.pending_candidate.value == 60
+        assert gui_app.calculator.total == 0  # 40 was never added
+
+        gui_app.on_confirm_add()
+        assert gui_app.calculator.total == 60
+        assert [e.value for e in gui_app.calculator.history] == [60]
+
+    def test_error_event_while_awaiting_confirmation_discards_candidate(
+        self, gui_app: VoiceCalculatorApp
+    ):
+        """An ERROR event during pending confirmation clears the candidate and hides the buttons."""
+        gui_app.on_start()
+        gui_app.process_decision_result(make_confirm_candidate(47))
+        assert gui_app.state == UIState.AWAITING_CONFIRMATION
+
+        ev_err = ControllerEvent(
+            event_type=ControllerEventType.ERROR,
+            session_id=gui_app.controller.current_session_id,
+            error_message="Microphone was disconnected.",
+            error_type="MicLost",
+        )
+        gui_app._handle_controller_event(ev_err)
+
+        assert gui_app.state == UIState.ERROR
+        assert gui_app.pending_candidate is None
+        assert gui_app.confirm_buttons_frame.winfo_manager() == ""
+        assert gui_app.calculator.total == 0
+
+        # Even a stale Add after the error must not add the discarded value
+        gui_app.on_confirm_add()
+        assert gui_app.calculator.total == 0
+
+    def test_stopped_event_while_awaiting_confirmation_discards_candidate(
+        self, gui_app: VoiceCalculatorApp
+    ):
+        """A STOPPED event during pending confirmation clears the candidate and hides the buttons."""
+        gui_app.on_start()
+        gui_app.calculator.add(50)
+        gui_app.refresh_display()
+
+        gui_app.process_decision_result(make_confirm_candidate(88))
+        assert gui_app.state == UIState.AWAITING_CONFIRMATION
+
+        ev_stopped = ControllerEvent(
+            event_type=ControllerEventType.STOPPED,
+            session_id=gui_app.controller.current_session_id,
+        )
+        gui_app._handle_controller_event(ev_stopped)
+
+        assert gui_app.state == UIState.STOPPED
+        assert gui_app.pending_candidate is None
+        assert gui_app.confirm_buttons_frame.winfo_manager() == ""
+        assert gui_app.calculator.total == 50  # Only the pre-existing entry remains
+
+    def test_started_event_clears_stale_pending_candidate(self, gui_app: VoiceCalculatorApp):
+        """A STARTED event begins a fresh listening session with no orphaned confirmation prompt."""
+        # Candidate arrives while stopped
+        gui_app.process_decision_result(make_confirm_candidate(66))
+        assert gui_app.state == UIState.AWAITING_CONFIRMATION
+        assert gui_app.confirm_buttons_frame.winfo_manager() != ""
+
+        ev_start = ControllerEvent(
+            event_type=ControllerEventType.STARTED,
+            session_id=gui_app.controller.current_session_id,
+        )
+        gui_app._handle_controller_event(ev_start)
+
+        assert gui_app.state == UIState.LISTENING
+        assert gui_app.pending_candidate is None
+        assert gui_app.confirm_buttons_frame.winfo_manager() == ""
+        assert gui_app.calculator.total == 0
+
+    def test_start_reenabled_after_error_for_recovery(self, gui_app: VoiceCalculatorApp):
+        """After an ERROR the Start button is re-enabled and listening can be restarted."""
+        gui_app.on_start()
+        ev_err = ControllerEvent(
+            event_type=ControllerEventType.ERROR,
+            session_id=gui_app.controller.current_session_id,
+            error_message="Microphone was disconnected.",
+            error_type="MicLost",
+        )
+        gui_app._handle_controller_event(ev_err)
+
+        assert gui_app.state == UIState.ERROR
+        assert gui_app.btn_start.cget("state") == tk.NORMAL
+        assert gui_app.btn_stop.cget("state") == tk.DISABLED
+
+        gui_app.on_start()
+        assert gui_app.state == UIState.LISTENING
+        assert gui_app.btn_stop.cget("state") == tk.NORMAL
+
+    def test_undo_stack_reversibility_full_chain_through_gui(
+        self, gui_app: VoiceCalculatorApp
+    ):
+        """Confirmed additions are fully reversible LIFO: undo chain restores every prior total."""
+        gui_app.on_start()
+        for value in (100, 25, 5):
+            gui_app.process_decision_result(make_confirm_candidate(value))
+            assert gui_app.state == UIState.AWAITING_CONFIRMATION
+            gui_app.on_confirm_add()
+            assert gui_app.state == UIState.LISTENING
+
+        assert gui_app.calculator.total == 130
+        assert gui_app.calculator.count == 3
+        assert gui_app.history_listbox.size() == 3
+
+        gui_app.on_undo()
+        assert gui_app.calculator.total == 125
+        assert gui_app.history_listbox.size() == 2
+
+        gui_app.on_undo()
+        assert gui_app.calculator.total == 100
+        assert gui_app.history_listbox.size() == 1
+
+        gui_app.on_undo()
+        assert gui_app.calculator.total == 0
+        assert gui_app.calculator.is_empty
+        assert gui_app.history_listbox.size() == 0
+        assert gui_app.btn_undo.cget("state") == tk.DISABLED
+
+        # Undo on empty history is a safe no-op
+        gui_app.on_undo()
+        assert gui_app.calculator.total == 0
+        assert "Nothing to undo" in gui_app.lbl_feedback.cget("text")
+
+    def test_total_matches_history_sum_after_mixed_confirm_and_undo(
+        self, gui_app: VoiceCalculatorApp
+    ):
+        """Running total always equals the sum of history values through mixed confirm/undo flows."""
+        gui_app.on_start()
+        for value in (200, 1):
+            gui_app.process_decision_result(make_confirm_candidate(value))
+            gui_app.on_confirm_add()
+            assert gui_app.calculator.total == sum(
+                e.value for e in gui_app.calculator.history
+            )
+
+        gui_app.on_undo()
+        assert gui_app.calculator.total == 200
+
+        gui_app.process_decision_result(make_confirm_candidate(999))
+        gui_app.on_confirm_add()
+
+        assert gui_app.calculator.total == 1199
+        assert gui_app.calculator.total == sum(e.value for e in gui_app.calculator.history)
+        assert [e.value for e in gui_app.calculator.history] == [200, 999]
+
+    def test_auto_accept_with_missing_value_is_safe_no_op(self, gui_app: VoiceCalculatorApp):
+        """An ACCEPT decision without confirmation and without a value must not add anything."""
+        gui_app.on_start()
+        res = DecisionResult(
+            decision=DecisionType.ACCEPT,
+            value=None,
+            reason=DecisionReason.ACCEPTED_CANDIDATE,
+            requires_confirmation=False,
+        )
+
+        gui_app.process_decision_result(res)
+
+        assert gui_app.calculator.total == 0
+        assert gui_app.calculator.count == 0
+        assert gui_app.pending_candidate is None
+
+    def test_repeat_and_reject_show_friendly_plain_language_messages(
+        self, gui_app: VoiceCalculatorApp
+    ):
+        """REPEAT / REJECT decisions surface plain-language status and feedback text."""
+        gui_app.on_start()
+
+        gui_app.process_decision_result(
+            DecisionResult(
+                decision=DecisionType.REPEAT,
+                value=None,
+                reason=DecisionReason.NO_SPEECH,
+            )
+        )
+        assert "please speak a number" in gui_app.lbl_feedback.cget("text")
+        assert (
+            gui_app.lbl_status.cget("text")
+            == "No speech detected — please speak a number."
+        )
+
+        gui_app.process_decision_result(
+            DecisionResult(
+                decision=DecisionType.REJECT,
+                value=None,
+                reason=DecisionReason.PARSER_REJECTED_OUT_OF_RANGE,
+            )
+        )
+        assert "too large" in gui_app.lbl_feedback.cget("text")
+        assert gui_app.calculator.total == 0
+        assert gui_app.history_listbox.size() == 0
+
+    def test_keyboard_bindings_registered(self, gui_app: VoiceCalculatorApp):
+        """Enter (Add), Esc (Discard), and Ctrl+Z (Undo) shortcuts are bound on the root window."""
+        for seq in ("<Return>", "<KP_Enter>", "<Escape>", "<Control-z>"):
+            assert gui_app.root.bind(seq), f"Missing keyboard binding for {seq}"
+
+    def test_enter_key_confirms_and_escape_discards_pending_candidate(
+        self, event_gui_app: VoiceCalculatorApp
+    ):
+        """Keyboard shortcuts resolve a pending confirmation: Enter adds, Escape discards."""
+        app = event_gui_app
+        app.on_start()
+        show_and_focus(app)
+        app.process_decision_result(make_confirm_candidate(33))
+        assert app.state == UIState.AWAITING_CONFIRMATION
+
+        app.root.event_generate("<Return>")
+        app.root.update()
+        assert app.calculator.total == 33
+        assert app.pending_candidate is None
+
+        app.process_decision_result(make_confirm_candidate(44))
+        assert app.state == UIState.AWAITING_CONFIRMATION
+
+        app.root.event_generate("<Escape>")
+        app.root.update()
+        assert app.calculator.total == 33  # 44 discarded
+        assert app.pending_candidate is None
+
+    def test_enter_and_escape_are_safe_when_no_pending(
+        self, event_gui_app: VoiceCalculatorApp
+    ):
+        """Enter / Escape with no pending candidate are safe no-ops (no addition, no exception)."""
+        app = event_gui_app
+        app.on_start()
+        show_and_focus(app)
+
+        app.root.event_generate("<Return>")
+        app.root.update()
+        app.root.event_generate("<Escape>")
+        app.root.update()
+
+        assert app.calculator.total == 0
+        assert app.history_listbox.size() == 0
+        assert app.pending_candidate is None
+
+
+EXPECTED_REASON_MESSAGES = {
+    DecisionReason.NO_SPEECH: "No speech detected — please speak a number.",
+    DecisionReason.SOURCE_ERROR: "Microphone issue — please check microphone and press Start.",
+    DecisionReason.ASR_ERROR: "Couldn't process that — please say it again.",
+    DecisionReason.UTTERANCE_TOO_LONG: "Please say one number at a time.",
+    DecisionReason.UTTERANCE_DAMAGED: "Audio was interrupted — please say it again.",
+    DecisionReason.LOW_CONFIDENCE: "Didn't catch that clearly — please repeat.",
+    DecisionReason.UNAVAILABLE_CONFIDENCE: "Didn't catch that clearly — please repeat.",
+    DecisionReason.PARSER_REJECTED_NOT_A_NUMBER: "Didn't hear a number — please say a number.",
+    DecisionReason.PARSER_REJECTED_OUT_OF_RANGE: "That number is too large. I can add numbers up to 2,000.",
+    DecisionReason.PARSER_REJECTED_MALFORMED: "Didn't catch that clearly — please repeat.",
+    DecisionReason.PARSER_REJECTED_AMBIGUOUS: "Didn't catch that clearly — please repeat.",
+    DecisionReason.PARSER_REJECTED_MULTIPLE_NUMBERS: "Didn't catch that — please say the number again.",
+    DecisionReason.PARSER_REJECTED_UNSUPPORTED: "Didn't catch that — please say the number again.",
+    DecisionReason.PARSER_REJECTED_EMPTY: "Didn't catch that — please say the number again.",
+    DecisionReason.UNKNOWN_STATUS: "Didn't catch that — please say the number again.",
+}
+
+
+class TestPlainLanguageErrorMessages:
+    """Phase 5B: plain-language message mapping for every abnormal decision outcome."""
+
+    def test_repeat_reasons_map_to_friendly_messages(self):
+        """Every REPEAT reason maps to its documented plain-language message."""
+        repeat_reasons = [
+            DecisionReason.NO_SPEECH,
+            DecisionReason.SOURCE_ERROR,
+            DecisionReason.ASR_ERROR,
+            DecisionReason.UTTERANCE_TOO_LONG,
+            DecisionReason.UTTERANCE_DAMAGED,
+            DecisionReason.LOW_CONFIDENCE,
+            DecisionReason.UNAVAILABLE_CONFIDENCE,
+        ]
+        for reason in repeat_reasons:
+            res = DecisionResult(decision=DecisionType.REPEAT, value=None, reason=reason)
+            assert get_decision_feedback_message(res) == EXPECTED_REASON_MESSAGES[reason], (
+                f"Unexpected message for {reason.name}"
+            )
+
+    def test_reject_reasons_map_to_friendly_messages(self):
+        """Every REJECT reason maps to its documented plain-language message."""
+        reject_reasons = [
+            DecisionReason.PARSER_REJECTED_NOT_A_NUMBER,
+            DecisionReason.PARSER_REJECTED_OUT_OF_RANGE,
+            DecisionReason.PARSER_REJECTED_MALFORMED,
+            DecisionReason.PARSER_REJECTED_AMBIGUOUS,
+            DecisionReason.PARSER_REJECTED_MULTIPLE_NUMBERS,
+            DecisionReason.PARSER_REJECTED_UNSUPPORTED,
+            DecisionReason.PARSER_REJECTED_EMPTY,
+            DecisionReason.UNKNOWN_STATUS,
+        ]
+        for reason in reject_reasons:
+            res = DecisionResult(decision=DecisionType.REJECT, value=None, reason=reason)
+            assert get_decision_feedback_message(res) == EXPECTED_REASON_MESSAGES[reason], (
+                f"Unexpected message for {reason.name}"
+            )
+
+    def test_messages_never_leak_internal_reason_codes(self):
+        """No friendly message exposes internal reason codes, underscores, or engine names."""
+        for reason in EXPECTED_REASON_MESSAGES:
+            res = DecisionResult(
+                decision=DecisionType.REJECT if reason.name.startswith("PARSER") else DecisionType.REPEAT,
+                value=None,
+                reason=reason,
+            )
+            msg = get_decision_feedback_message(res)
+            assert msg, f"Empty message for {reason.name}"
+            assert "_" not in msg, f"Internal code leaked in message for {reason.name}: {msg}"
+            assert "PARSER" not in msg, f"Parser code leaked for {reason.name}: {msg}"
+            assert "ASR" not in msg, f"Engine name leaked for {reason.name}: {msg}"
+
+    def test_accept_messages_and_number_formatting(self):
+        """ACCEPT messages confirm or report the formatted value; None formats safely."""
+        confirm_res = DecisionResult(
+            decision=DecisionType.ACCEPT,
+            value=1250,
+            reason=DecisionReason.ACCEPTED_CANDIDATE,
+            requires_confirmation=True,
+        )
+        assert get_decision_feedback_message(confirm_res) == "Did you say: 1,250?"
+
+        auto_res = DecisionResult(
+            decision=DecisionType.ACCEPT,
+            value=1250,
+            reason=DecisionReason.ACCEPTED_CANDIDATE,
+            requires_confirmation=False,
+        )
+        assert get_decision_feedback_message(auto_res) == "Added: 1,250"
+
+        assert format_number(None) == "0"
+        assert format_number(12450) == "12,450"
 
 
 

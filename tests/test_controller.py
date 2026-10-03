@@ -10,9 +10,15 @@ Verifies:
 - Microphone errors and ModelMissingError are safely caught and emitted as ERROR events.
 - Session IDs increment per start(), enabling isolation and filtering of stale events.
 - Absolute invariant: zero arithmetic or calculator mutation inside the controller.
+
+Phase 5B additions (Confirmation & Recovery Reliability):
+- Stop requested while ASR is mid-utterance discards the in-flight result (no DECISION event).
+- Audio source factory failure and generic engine-load failure emit ERROR events and stay stopped.
+- An ASR engine crash during inference is contained as a REPEAT decision (never a value).
 """
 
 import queue
+import threading
 import time
 import numpy as np
 import pytest
@@ -79,6 +85,37 @@ class MissingModelEngine(FakeEngine):
 
     def load(self) -> None:
         raise ModelMissingError("Simulated missing model directory")
+
+
+class GenericLoadFailureEngine(FakeEngine):
+    """ASREngine fake that raises an unexpected exception on load()."""
+
+    def load(self) -> None:
+        raise RuntimeError("Simulated engine crash on load")
+
+
+class BlockingEngine(FakeEngine):
+    """ASREngine fake whose transcribe() blocks until externally released (simulates slow ASR)."""
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self._release = threading.Event()
+        self.transcribe_started = threading.Event()
+
+    def transcribe(self, pcm_data, sample_rate=16000):
+        self.transcribe_started.set()
+        self._release.wait(timeout=5.0)
+        return super().transcribe(pcm_data, sample_rate=sample_rate)
+
+    def release(self) -> None:
+        self._release.set()
+
+
+class CrashingTranscribeEngine(FakeEngine):
+    """ASREngine fake that raises an unexpected exception inside transcribe()."""
+
+    def transcribe(self, pcm_data, sample_rate=16000):
+        raise RuntimeError("Simulated decoder crash")
 
 
 class TestListeningController:
@@ -306,3 +343,119 @@ class TestListeningController:
         controller.set_mode(OperatingMode.SAFE)
         assert controller.mode == OperatingMode.SAFE
         assert controller.decision_engine.mode == OperatingMode.SAFE
+
+
+class TestControllerRecoveryReliability:
+    """Phase 5B: controller reliability under abnormal events and shutdown races."""
+
+    def test_audio_source_factory_failure_emits_error_and_stays_stopped(self):
+        """A failing audio source factory emits an ERROR event and never starts a worker."""
+        def broken_factory() -> FakeAudioSource:
+            raise RuntimeError("No audio device available")
+
+        controller = ListeningController(
+            engine=FakeEngine(),
+            audio_source_factory=broken_factory,
+        )
+
+        started = controller.start()
+        assert started is False
+        assert controller.is_listening is False
+
+        event = controller.event_queue.get(timeout=1.0)
+        assert event.event_type == ControllerEventType.ERROR
+        assert "Failed to initialize audio components" in (event.error_message or "")
+        assert event.error_type == "RuntimeError"
+        assert event.session_id == controller.current_session_id
+
+    def test_generic_engine_load_failure_emits_error_event(self):
+        """An unexpected engine load exception emits an ERROR event (distinct from model-missing)."""
+        controller = ListeningController(
+            engine=GenericLoadFailureEngine(),
+            audio_source_factory=lambda: FakeAudioSource(),
+        )
+
+        controller.start()
+
+        event = controller.event_queue.get(timeout=1.0)
+        assert event.event_type == ControllerEventType.ERROR
+        assert event.error_type == "RuntimeError"
+        assert "failed to load" in (event.error_message or "").lower()
+
+        controller.stop(timeout=1.0)
+        assert controller.is_listening is False
+
+    def test_stop_during_asr_processing_discards_decision_event(self):
+        """Stop requested while ASR is mid-utterance discards the in-flight result (no DECISION)."""
+        blocking_engine = BlockingEngine(default_text="one hundred fifty")
+        source = FakeAudioSource()
+        for f in make_pcm_frames(5, amplitude=2000) + make_silent_frames(5):
+            source._queue.put(f)
+
+        controller = ListeningController(
+            engine=blocking_engine,
+            audio_source_factory=lambda: source,
+            segmenter_factory=lambda: UtteranceSegmenter(vad=EnergyVAD(), hangover_ms=60, min_utterance_ms=60),
+        )
+
+        try:
+            controller.start()
+            # Wait until the worker is blocked inside transcribe()
+            assert blocking_engine.transcribe_started.wait(timeout=5.0), (
+                "Worker never reached ASR transcription"
+            )
+
+            # Request stop while the utterance is in-flight
+            controller.stop(timeout=2.0)
+            blocking_engine.release()
+            time.sleep(0.5)  # Allow the worker to wake up, observe the stop flag, and exit
+
+            events: list[ControllerEvent] = []
+            while True:
+                try:
+                    events.append(controller.event_queue.get_nowait())
+                except queue.Empty:
+                    break
+
+            event_types = [e.event_type for e in events]
+            assert ControllerEventType.DECISION not in event_types, (
+                "In-flight utterance produced a DECISION event after stop request"
+            )
+            assert ControllerEventType.STOPPED in event_types
+        finally:
+            blocking_engine.release()
+
+    def test_asr_crash_during_inference_yields_repeat_decision(self):
+        """An unexpected ASR crash is contained by the pipeline as a REPEAT decision (no value)."""
+        source = FakeAudioSource()
+        for f in make_pcm_frames(5, amplitude=2000) + make_silent_frames(5):
+            source._queue.put(f)
+
+        controller = ListeningController(
+            engine=CrashingTranscribeEngine(),
+            audio_source_factory=lambda: source,
+            segmenter_factory=lambda: UtteranceSegmenter(vad=EnergyVAD(), hangover_ms=60, min_utterance_ms=60),
+        )
+
+        controller.start()
+
+        decision_event = None
+        timeout_end = time.time() + 2.0
+        while time.time() < timeout_end:
+            try:
+                ev = controller.event_queue.get(timeout=0.2)
+                if ev.event_type == ControllerEventType.DECISION:
+                    decision_event = ev
+                    break
+            except queue.Empty:
+                pass
+
+        controller.stop(timeout=1.0)
+
+        assert decision_event is not None, "No DECISION event emitted for crashed ASR inference"
+        decision = decision_event.decision
+        assert decision is not None
+        assert decision.decision == DecisionType.REPEAT
+        assert decision.value is None
+        assert decision.reason == DecisionReason.ASR_ERROR
+        assert "Simulated decoder crash" in decision.explanation
