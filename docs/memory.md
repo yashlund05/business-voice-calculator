@@ -7,21 +7,22 @@
 
 ## 1. Project Status
 
-- **Overall status:** Phase 5.0 (Documentation Sync) completed. 394 unit/mock/integration tests passing, 1 model-dependent test cleanly skipped (100% pass rate).
+- **Overall status:** Phase 5A (Error Audit & Synthetic Stress Baseline) completed. 394 unit/mock/integration tests passing, 1 model-dependent test cleanly skipped (100% pass rate).
 - **Last updated:** 2026-10-02 by Antigravity
 
 ## 2. Current Phase
 
-- Phase: **Phase 5 — Validation, Error Audit & Safety Calibration** (Subtask 5.0 completed).
+- Phase: **Phase 5 — Validation, Error Audit & Safety Calibration** (Subtask 5A completed).
 
 ## 3. Current Task
 
-- Phase 5.0 completed. Next: Phase 5A (Error audit + synthetic stress on existing dataset, no new recordings).
+- Phase 5A completed. Next: Phase 5B (Confirmation & Recovery Reliability).
 
 ## 4. Completed Work
 
 - Documentation pack created (`docs/prd.md`, `architecture.md`, `rules.md`, `phases.md`, `design.md`, `memory.md`, `research.md`).
-- [0.1 Skeleton] Established virtual environment (Python 3.11.9), `.gitignore`, `pyproject.toml`, `requirements.txt`, `README.md`, package structure `src/voice_calculator/__init__.py`.
+- [5A Existing-Dataset Error Audit & Synthetic Stress Baseline] Created `tools/audit_errors.py` and `tools/stress_dataset.py`. Classified all 61 eligible Dad baseline utterances into a formal error taxonomy (`analysis/error_audit.csv`, `analysis/error_audit.md`). Verified 100% containment (0/15 wrong values auto-added). Built engine complementarity analysis showing 73.8% oracle upper bound across Vosk and Whisper. Generated 6 synthetic stress variants (tempo 0.9x/1.15x, gain +/-6dB, pink noise SNR 20dB/10dB) and benchmarked both engines (`analysis/stress_comparison.md`, `docs/research.md` EXP-004 and EXP-005). All 394 tests passing. Zero changes in `src/` or `tests/`.
+- [5.0 Documentation Sync] Reconciled `docs/phases.md` with actual execution history (Phases 0–4 complete; Phase 5 & 6 roadmap rewritten). Resolved `docs/memory.md` §10 contradiction with benchmark history. Committed benchmark JSON summary artifacts to `analysis/results/` with documentation.
 - [0.2 Config & logging] Implemented `config.py` constants and tunables, `logging_setup.py` with privacy-safe rotating file logging; added tests in `tests/test_config.py`, `tests/test_logging.py`, and `tests/test_smoke.py`.
 - [1A Grammar Specification & Clarification] Defined formal grammar specification for 0–2000, unambiguous "and" / "a" rules, 1000–1999 structure, structural vs range error classification, normalization rules, reason codes, parser interface contract, and exhaustive testing plan.
 - [1B Number Parser Implementation & Audit] Implemented `src/voice_calculator/numparse.py` with pure deterministic grammar parser, normalization, and reason code classification. Added `tests/test_numparse_cases.py` and `tests/test_numparse_exhaustive.py` (exhaustive 0–2000 canonical words, 0–2000 digit strings, boundary values, invariants, and fuzz testing).
@@ -155,7 +156,7 @@
 
 ## 13. Next Task
 
-- **Phase 5A**: Error audit + synthetic stress testing on existing Dad dataset (no new recordings).
+- **Phase 5B**: Confirmation and recovery reliability testing (UI recovery, discard/retry flows, undo stack invariants).
 
 ## 15. Do Not Change Casually (requires explicit user approval)
 

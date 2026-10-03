@@ -1,0 +1,125 @@
+prompt_id,engine,intended_value,alignment_confidence,raw_transcript,normalized_transcript,parser_status,parsed_value,exact_numeric_match,taxonomy_category,taxonomy_detail,notes
+1,vosk,0,HIGH,zero,zero,SUCCESS,0,True,CORRECT,Exact integer match,Spoken as 'zero' (1.17-1.80s). Preceded by mic tap at 0.15s.
+1,faster-whisper-tiny,0,HIGH,0.,0,SUCCESS,0,True,CORRECT,Exact integer match,Spoken as 'zero' (1.17-1.80s). Preceded by mic tap at 0.15s.
+2,vosk,1,HIGH,one,one,SUCCESS,1,True,CORRECT,Exact integer match,Spoken as 'one' (2.40-3.15s).
+2,faster-whisper-tiny,1,HIGH,one,one,SUCCESS,1,True,CORRECT,Exact integer match,Spoken as 'one' (2.40-3.15s).
+3,vosk,5,HIGH,five,five,SUCCESS,5,True,CORRECT,Exact integer match,Spoken as 'five' (4.26-4.74s).
+3,faster-whisper-tiny,5,HIGH,Bye.,bye,REJECTED,,False,PARSER_REJECTION_NOT_A_NUMBER,Out-of-vocabulary or corrupted phonemes in transcript 'Bye.',Spoken as 'five' (4.26-4.74s).
+4,vosk,9,HIGH,nine,nine,SUCCESS,9,True,CORRECT,Exact integer match,Spoken as 'nine' (5.64-6.18s).
+4,faster-whisper-tiny,9,HIGH,main,main,REJECTED,,False,PARSER_REJECTION_NOT_A_NUMBER,Out-of-vocabulary or corrupted phonemes in transcript 'main',Spoken as 'nine' (5.64-6.18s).
+5,vosk,10,HIGH,one zero,one zero,REJECTED,,False,PARSER_REJECTION_MULTIPLE_NUMBERS,Digit-by-digit or disconnected numbers in transcript 'one zero',Spoken as digit sequence 'one zero' (6.72-8.34s).
+5,faster-whisper-tiny,10,HIGH,1 0.,1 0,REJECTED,,False,PARSER_REJECTION_MULTIPLE_NUMBERS,Digit-by-digit or disconnected numbers in transcript '1 0.',Spoken as digit sequence 'one zero' (6.72-8.34s).
+6,vosk,12,HIGH,one two,one two,REJECTED,,False,PARSER_REJECTION_MULTIPLE_NUMBERS,Digit-by-digit or disconnected numbers in transcript 'one two',Spoken as digit sequence 'one two' (8.88-10.05s).
+6,faster-whisper-tiny,12,HIGH,,,REJECTED,,False,PARSER_REJECTION_EMPTY,ASR produced empty transcript,Spoken as digit sequence 'one two' (8.88-10.05s).
+7,vosk,15,MEDIUM,ten,ten,SUCCESS,10,False,CONFUSABLE_PAIR,Acoustic confusion on confusable/tens (15 vs 10) -> parsed as 10,Spoken as 'fifteen' (10.80-11.07s). Vosk transcribed 'eighty' conf=0.38.
+7,faster-whisper-tiny,15,MEDIUM,,,REJECTED,,False,PARSER_REJECTION_EMPTY,ASR produced empty transcript,Spoken as 'fifteen' (10.80-11.07s). Vosk transcribed 'eighty' conf=0.38.
+8,vosk,19,HIGH,one nine,one nine,REJECTED,,False,PARSER_REJECTION_MULTIPLE_NUMBERS,Digit-by-digit or disconnected numbers in transcript 'one nine',Spoken as digit sequence 'one nine' (12.87-13.56s).
+8,faster-whisper-tiny,19,HIGH,1 9.,1 9,REJECTED,,False,PARSER_REJECTION_MULTIPLE_NUMBERS,Digit-by-digit or disconnected numbers in transcript '1 9.',Spoken as digit sequence 'one nine' (12.87-13.56s).
+9,vosk,15,HIGH,fifteen,fifteen,SUCCESS,15,True,CORRECT,Exact integer match,Spoken as 'fifteen' (15.42-16.08s).
+9,faster-whisper-tiny,15,HIGH,15.,15,SUCCESS,15,True,CORRECT,Exact integer match,Spoken as 'fifteen' (15.42-16.08s).
+10,vosk,50,HIGH,[unk] zero,[unk] zero,REJECTED,,False,PARSER_REJECTION_MALFORMED,Structural scale or grammar malformation in transcript '[unk] zero',Spoken as digit sequence 'five zero' (16.80-17.55s).
+10,faster-whisper-tiny,50,HIGH,by 0.,by 0,REJECTED,,False,PARSER_REJECTION_MALFORMED,Structural scale or grammar malformation in transcript 'by 0.',Spoken as digit sequence 'five zero' (16.80-17.55s).
+11,vosk,16,HIGH,sixteen,sixteen,SUCCESS,16,True,CORRECT,Exact integer match,Spoken as 'sixteen' (18.30-19.05s).
+11,faster-whisper-tiny,16,HIGH,16.,16,SUCCESS,16,True,CORRECT,Exact integer match,Spoken as 'sixteen' (18.30-19.05s).
+12,vosk,60,HIGH,six sixty,six sixty,REJECTED,,False,PARSER_REJECTION_AMBIGUOUS,Ambiguous compound/repetition in transcript 'six sixty',Spoken as 'sixty' (20.10-21.21s).
+12,faster-whisper-tiny,60,HIGH,660.,660,SUCCESS,660,False,HALLUCINATED_DIGITS,"Spoke number/compound, ASR produced multi-digit string '660.' -> parsed as 660",Spoken as 'sixty' (20.10-21.21s).
+13,vosk,17,HIGH,seventeen,seventeen,SUCCESS,17,True,CORRECT,Exact integer match,Spoken as 'seventeen' (22.14-22.89s).
+13,faster-whisper-tiny,17,HIGH,17.,17,SUCCESS,17,True,CORRECT,Exact integer match,Spoken as 'seventeen' (22.14-22.89s).
+14,vosk,70,MEDIUM,eighty,eighty,SUCCESS,80,False,CONFUSABLE_PAIR,Acoustic confusion on confusable/tens (70 vs 80) -> parsed as 80,Spoken at 23.58-24.24s as 'seventy' / 'eighty' (Vosk conf=1.00 eighty).
+14,faster-whisper-tiny,70,MEDIUM,8p.,8p,REJECTED,,False,PARSER_REJECTION_NOT_A_NUMBER,Out-of-vocabulary or corrupted phonemes in transcript '8p.',Spoken at 23.58-24.24s as 'seventy' / 'eighty' (Vosk conf=1.00 eighty).
+15,vosk,18,HIGH,eighteen,eighteen,SUCCESS,18,True,CORRECT,Exact integer match,Spoken as 'eighteen' (27.06-27.66s).
+15,faster-whisper-tiny,18,HIGH,18.,18,SUCCESS,18,True,CORRECT,Exact integer match,Spoken as 'eighteen' (27.06-27.66s).
+16,vosk,80,LOW,,,REJECTED,,False,EXCLUDED,Excluded from primary metrics (pause/omitted speech),Prompt 80 omitted or merged with prompt 14; silence/pause window recorded.
+16,faster-whisper-tiny,80,LOW,,,REJECTED,,False,EXCLUDED,Excluded from primary metrics (pause/omitted speech),Prompt 80 omitted or merged with prompt 14; silence/pause window recorded.
+17,vosk,19,HIGH,nineteen,nineteen,SUCCESS,19,True,CORRECT,Exact integer match,Spoken as 'nineteen' (29.25-29.97s).
+17,faster-whisper-tiny,19,HIGH,19.,19,SUCCESS,19,True,CORRECT,Exact integer match,Spoken as 'nineteen' (29.25-29.97s).
+18,vosk,90,HIGH,nine nine zero ninety,nine nine zero ninety,REJECTED,,False,PARSER_REJECTION_MALFORMED,Structural scale or grammar malformation in transcript 'nine nine zero ninety',Spoken as 'nine nine zero ninety' (31.47-33.36s self-clarification).
+18,faster-whisper-tiny,90,HIGH,990.,990,SUCCESS,990,False,HALLUCINATED_DIGITS,"Spoke number/compound, ASR produced multi-digit string '990.' -> parsed as 990",Spoken as 'nine nine zero ninety' (31.47-33.36s self-clarification).
+19,vosk,21,HIGH,twenty one,twenty one,SUCCESS,21,True,CORRECT,Exact integer match,Spoken as 'twenty one' (34.14-34.74s).
+19,faster-whisper-tiny,21,HIGH,21.,21,SUCCESS,21,True,CORRECT,Exact integer match,Spoken as 'twenty one' (34.14-34.74s).
+20,vosk,25,HIGH,,,REJECTED,,False,PARSER_REJECTION_EMPTY,ASR produced empty transcript,Spoken as 'twenty five' (35.37-36.06s).
+20,faster-whisper-tiny,25,HIGH,25.,25,SUCCESS,25,True,CORRECT,Exact integer match,Spoken as 'twenty five' (35.37-36.06s).
+21,vosk,35,MEDIUM,,,REJECTED,,False,PARSER_REJECTION_EMPTY,ASR produced empty transcript,Spoken as 'thirty five' (36.72-37.17s). Vosk unk conf=0.58.
+21,faster-whisper-tiny,35,MEDIUM,got a defi.,got a defi,REJECTED,,False,PARSER_REJECTION_NOT_A_NUMBER,Out-of-vocabulary or corrupted phonemes in transcript 'got a defi.',Spoken as 'thirty five' (36.72-37.17s). Vosk unk conf=0.58.
+22,vosk,47,HIGH,thirty seven,thirty seven,SUCCESS,37,False,CONFUSABLE_PAIR,Acoustic confusion on confusable/tens (47 vs 37) -> parsed as 37,Spoken as 'forty seven' (37.83-38.58s).
+22,faster-whisper-tiny,47,HIGH,47.,47,SUCCESS,47,True,CORRECT,Exact integer match,Spoken as 'forty seven' (37.83-38.58s).
+23,vosk,50,HIGH,fifty,fifty,SUCCESS,50,True,CORRECT,Exact integer match,Spoken as 'fifty' (39.33-39.87s).
+23,faster-whisper-tiny,50,HIGH,50.,50,SUCCESS,50,True,CORRECT,Exact integer match,Spoken as 'fifty' (39.33-39.87s).
+24,vosk,65,HIGH,sixty five,sixty five,SUCCESS,65,True,CORRECT,Exact integer match,Spoken as 'sixty five' (40.32-41.22s).
+24,faster-whisper-tiny,65,HIGH,65.,65,SUCCESS,65,True,CORRECT,Exact integer match,Spoken as 'sixty five' (40.32-41.22s).
+25,vosk,75,HIGH,,,REJECTED,,False,PARSER_REJECTION_EMPTY,ASR produced empty transcript,Spoken as 'seventy five' (41.52-42.48s).
+25,faster-whisper-tiny,75,HIGH,75.,75,SUCCESS,75,True,CORRECT,Exact integer match,Spoken as 'seventy five' (41.52-42.48s).
+26,vosk,80,HIGH,eight zero eighty,eight zero eighty,REJECTED,,False,PARSER_REJECTION_MALFORMED,Structural scale or grammar malformation in transcript 'eight zero eighty',Spoken as 'eight zero eighty' (43.59-44.82s).
+26,faster-whisper-tiny,80,HIGH,808,808,SUCCESS,808,False,HALLUCINATED_DIGITS,"Spoke number/compound, ASR produced multi-digit string '808' -> parsed as 808",Spoken as 'eight zero eighty' (43.59-44.82s).
+27,vosk,95,MEDIUM,,,REJECTED,,False,PARSER_REJECTION_EMPTY,ASR produced empty transcript,Spoken as 'ninety five' (45.36-46.11s). Vosk unk conf=0.73.
+27,faster-whisper-tiny,95,MEDIUM,95.,95,SUCCESS,95,True,CORRECT,Exact integer match,Spoken as 'ninety five' (45.36-46.11s). Vosk unk conf=0.73.
+28,vosk,100,HIGH,hundred,hundred,SUCCESS,100,True,CORRECT,Exact integer match,Spoken as natural 'hundred' (46.56-47.19s).
+28,faster-whisper-tiny,100,HIGH,,,REJECTED,,False,PARSER_REJECTION_EMPTY,ASR produced empty transcript,Spoken as natural 'hundred' (46.56-47.19s).
+29,vosk,105,HIGH,hundred and five,hundred and five,SUCCESS,105,True,CORRECT,Exact integer match,Spoken as natural 'hundred and five' (47.76-48.63s).
+29,faster-whisper-tiny,105,HIGH,105.,105,SUCCESS,105,True,CORRECT,Exact integer match,Spoken as natural 'hundred and five' (47.76-48.63s).
+30,vosk,110,HIGH,hundred ten,hundred ten,SUCCESS,110,True,CORRECT,Exact integer match,Spoken as natural 'hundred ten' (49.20-50.46s).
+30,faster-whisper-tiny,110,HIGH,110.,110,SUCCESS,110,True,CORRECT,Exact integer match,Spoken as natural 'hundred ten' (49.20-50.46s).
+31,vosk,125,HIGH,hundred [unk],hundred [unk],REJECTED,,False,PARSER_REJECTION_MALFORMED,Structural scale or grammar malformation in transcript 'hundred [unk]',Spoken as natural 'hundred twenty five' (51.12-52.11s).
+31,faster-whisper-tiny,125,HIGH,125.,125,SUCCESS,125,True,CORRECT,Exact integer match,Spoken as natural 'hundred twenty five' (51.12-52.11s).
+32,vosk,150,HIGH,fifty,fifty,SUCCESS,50,False,WORD_DROP,"Spoke 'hundred fifty' (150), ASR dropped 'hundred' -> transcript 'fifty' parsed as 50",Spoken as natural 'hundred fifty' (52.32-53.64s).
+32,faster-whisper-tiny,150,HIGH,150.,150,SUCCESS,150,True,CORRECT,Exact integer match,Spoken as natural 'hundred fifty' (52.32-53.64s).
+33,vosk,175,HIGH,hundred seventy five,hundred seventy five,SUCCESS,175,True,CORRECT,Exact integer match,Spoken as natural 'hundred seventy five' (54.12-55.26s).
+33,faster-whisper-tiny,175,HIGH,175.,175,SUCCESS,175,True,CORRECT,Exact integer match,Spoken as natural 'hundred seventy five' (54.12-55.26s).
+34,vosk,200,HIGH,two hundred,two hundred,SUCCESS,200,True,CORRECT,Exact integer match,Spoken as 'two hundred' (56.22-56.94s).
+34,faster-whisper-tiny,200,HIGH,200.,200,SUCCESS,200,True,CORRECT,Exact integer match,Spoken as 'two hundred' (56.22-56.94s).
+35,vosk,250,HIGH,two hundred fifty,two hundred fifty,SUCCESS,250,True,CORRECT,Exact integer match,Spoken as 'two hundred fifty' (57.30-58.32s).
+35,faster-whisper-tiny,250,HIGH,250.,250,SUCCESS,250,True,CORRECT,Exact integer match,Spoken as 'two hundred fifty' (57.30-58.32s).
+36,vosk,500,MEDIUM,,,REJECTED,,False,PARSER_REJECTION_EMPTY,ASR produced empty transcript,Spoken as 'five hundred' (59.07-59.52s; initial 'five' quiet).
+36,faster-whisper-tiny,500,MEDIUM,500.,500,SUCCESS,500,True,CORRECT,Exact integer match,Spoken as 'five hundred' (59.07-59.52s; initial 'five' quiet).
+37,vosk,750,HIGH,seven [unk] fifty,seven [unk] fifty,REJECTED,,False,PARSER_REJECTION_MALFORMED,Structural scale or grammar malformation in transcript 'seven [unk] fifty',Spoken as 'seven hundred fifty' (60.12-62.55s).
+37,faster-whisper-tiny,750,HIGH,7 7 5 0 7 50.,7 7 5 0 7 50,REJECTED,,False,PARSER_REJECTION_MULTIPLE_NUMBERS,Digit-by-digit or disconnected numbers in transcript '7 7 5 0 7 50.',Spoken as 'seven hundred fifty' (60.12-62.55s).
+38,vosk,999,HIGH,nine hundred ninety nine,nine hundred ninety nine,SUCCESS,999,True,CORRECT,Exact integer match,Spoken as 'nine hundred ninety nine' (63.87-65.13s).
+38,faster-whisper-tiny,999,HIGH,999.,999,SUCCESS,999,True,CORRECT,Exact integer match,Spoken as 'nine hundred ninety nine' (63.87-65.13s).
+39,vosk,1000,HIGH,one thousand,one thousand,SUCCESS,1000,True,CORRECT,Exact integer match,Spoken as 'one thousand' (65.43-66.36s).
+39,faster-whisper-tiny,1000,HIGH,1000,1000,SUCCESS,1000,True,CORRECT,Exact integer match,Spoken as 'one thousand' (65.43-66.36s).
+40,vosk,1050,HIGH,one thousand fifty,one thousand fifty,SUCCESS,1050,True,CORRECT,Exact integer match,Spoken as 'one thousand fifty' (66.72-67.92s).
+40,faster-whisper-tiny,1050,HIGH,150.,150,SUCCESS,150,False,WORD_DROP,"Spoke thousands/compound (1050), ASR dropped leading thousand/multiplier -> transcript '150.' parsed as 150",Spoken as 'one thousand fifty' (66.72-67.92s).
+41,vosk,1100,HIGH,eleven hundred,eleven hundred,SUCCESS,1100,True,CORRECT,Exact integer match,Spoken as teen-hundred 'eleven hundred' (68.43-69.18s).
+41,faster-whisper-tiny,1100,HIGH,Hello hello red.,hello hello red,REJECTED,,False,PARSER_REJECTION_NOT_A_NUMBER,Out-of-vocabulary or corrupted phonemes in transcript 'Hello hello red.',Spoken as teen-hundred 'eleven hundred' (68.43-69.18s).
+42,vosk,1200,MEDIUM,twelve hundred,twelve hundred,SUCCESS,1200,True,CORRECT,Exact integer match,Spoken as teen-hundred 'twelve hundred' (70.02-70.50s; 'twelve' quiet).
+42,faster-whisper-tiny,1200,MEDIUM,200.,200,SUCCESS,200,False,WORD_DROP,"Spoke thousands/compound (1200), ASR dropped leading thousand/multiplier -> transcript '200.' parsed as 200",Spoken as teen-hundred 'twelve hundred' (70.02-70.50s; 'twelve' quiet).
+43,vosk,1250,HIGH,hundred fifteen,hundred fifteen,SUCCESS,115,False,BARE_FORM_TRAP,"Spoke 'twelve hundred fifty' (1250), ASR transcribed 'hundred fifteen' -> parsed as 115",Spoken as 'hundred fifty' / 'twelve hundred fifty' (72.03-72.87s).
+43,faster-whisper-tiny,1250,HIGH,250.,250,SUCCESS,250,False,WORD_DROP,"Spoke thousands/compound (1250), ASR dropped leading thousand/multiplier -> transcript '250.' parsed as 250",Spoken as 'hundred fifty' / 'twelve hundred fifty' (72.03-72.87s).
+44,vosk,1500,HIGH,fifteen hundred,fifteen hundred,SUCCESS,1500,True,CORRECT,Exact integer match,Spoken as teen-hundred 'fifteen hundred' (73.44-74.19s).
+44,faster-whisper-tiny,1500,HIGH,1500.,1500,SUCCESS,1500,True,CORRECT,Exact integer match,Spoken as teen-hundred 'fifteen hundred' (73.44-74.19s).
+45,vosk,1750,HIGH,seventy hundred fifty,seventy hundred fifty,REJECTED,,False,PARSER_REJECTION_MALFORMED,Structural scale or grammar malformation in transcript 'seventy hundred fifty',Spoken as 'seventeen hundred fifty' (74.64-76.14s). Complete utterance extracted across 6s VAD boundary.
+45,faster-whisper-tiny,1750,HIGH,750.,750,SUCCESS,750,False,WORD_DROP,"Spoke thousands/compound (1750), ASR dropped leading thousand/multiplier -> transcript '750.' parsed as 750",Spoken as 'seventeen hundred fifty' (74.64-76.14s). Complete utterance extracted across 6s VAD boundary.
+46,vosk,1900,HIGH,nineteen hundred,nineteen hundred,SUCCESS,1900,True,CORRECT,Exact integer match,Spoken as teen-hundred 'nineteen hundred' (77.04-77.97s).
+46,faster-whisper-tiny,1900,HIGH,1900.,1900,SUCCESS,1900,True,CORRECT,Exact integer match,Spoken as teen-hundred 'nineteen hundred' (77.04-77.97s).
+47,vosk,1999,HIGH,ninety hundred ninety nine,ninety hundred ninety nine,REJECTED,,False,PARSER_REJECTION_MALFORMED,Structural scale or grammar malformation in transcript 'ninety hundred ninety nine',Spoken as teen-hundred 'nineteen hundred ninety nine' (79.05-80.55s).
+47,faster-whisper-tiny,1999,HIGH,99999.,99999,REJECTED,,False,PARSER_REJECTION_OUT_OF_RANGE,Transcript parsed to out-of-range value (>2000) in '99999.',Spoken as teen-hundred 'nineteen hundred ninety nine' (79.05-80.55s).
+48,vosk,2000,HIGH,thousand,thousand,SUCCESS,1000,False,BARE_FORM_TRAP,"Spoke 'two thousand' (2000), ASR dropped 'two' -> transcript 'thousand' parsed as 1000",Spoken as 'two thousand' (80.95-81.75s). Complete utterance extracted across 6s VAD boundary.
+48,faster-whisper-tiny,2000,HIGH,2000.,2000,SUCCESS,2000,True,CORRECT,Exact integer match,Spoken as 'two thousand' (80.95-81.75s). Complete utterance extracted across 6s VAD boundary.
+49,vosk,47,HIGH,forty seven,forty seven,SUCCESS,47,True,CORRECT,Exact integer match,Spoken as 'forty seven' (83.25-84.15s).
+49,faster-whisper-tiny,47,HIGH,47.,47,SUCCESS,47,True,CORRECT,Exact integer match,Spoken as 'forty seven' (83.25-84.15s).
+50,vosk,125,HIGH,hundred twenty five,hundred twenty five,SUCCESS,125,True,CORRECT,Exact integer match,Spoken as natural 'hundred twenty five' (84.72-87.06s).
+50,faster-whisper-tiny,125,HIGH,125.,125,SUCCESS,125,True,CORRECT,Exact integer match,Spoken as natural 'hundred twenty five' (84.72-87.06s).
+51,vosk,80,HIGH,eighty,eighty,SUCCESS,80,True,CORRECT,Exact integer match,Spoken as 'eighty' (87.60-88.23s).
+51,faster-whisper-tiny,80,HIGH,,,REJECTED,,False,PARSER_REJECTION_EMPTY,ASR produced empty transcript,Spoken as 'eighty' (87.60-88.23s).
+52,vosk,1500,HIGH,fifteen hundred,fifteen hundred,SUCCESS,1500,True,CORRECT,Exact integer match,Spoken as teen-hundred 'fifteen hundred' (88.89-89.82s).
+52,faster-whisper-tiny,1500,HIGH,1500.,1500,SUCCESS,1500,True,CORRECT,Exact integer match,Spoken as teen-hundred 'fifteen hundred' (88.89-89.82s).
+53,vosk,35,MEDIUM,,,REJECTED,,False,PARSER_REJECTION_EMPTY,ASR produced empty transcript,Spoken quickly as 'thirty five' / 'five' (90.69-91.14s).
+53,faster-whisper-tiny,35,MEDIUM,85.,85,SUCCESS,85,False,CONFUSABLE_PAIR,Acoustic confusion on confusable/tens (35 vs 85) -> parsed as 85,Spoken quickly as 'thirty five' / 'five' (90.69-91.14s).
+54,vosk,200,HIGH,two hundred,two hundred,SUCCESS,200,True,CORRECT,Exact integer match,Spoken as 'two hundred' (92.31-93.00s).
+54,faster-whisper-tiny,200,HIGH,200.,200,SUCCESS,200,True,CORRECT,Exact integer match,Spoken as 'two hundred' (92.31-93.00s).
+55,vosk,75,HIGH,seventy five,seventy five,SUCCESS,75,True,CORRECT,Exact integer match,Spoken as 'seventy five' (93.27-94.20s).
+55,faster-whisper-tiny,75,HIGH,75.,75,SUCCESS,75,True,CORRECT,Exact integer match,Spoken as 'seventy five' (93.27-94.20s).
+56,vosk,50,HIGH,fifty,fifty,SUCCESS,50,True,CORRECT,Exact integer match,Spoken as 'fifty' (94.86-95.58s).
+56,faster-whisper-tiny,50,HIGH,50.,50,SUCCESS,50,True,CORRECT,Exact integer match,Spoken as 'fifty' (94.86-95.58s).
+57,vosk,110,HIGH,[unk] ten,[unk] ten,REJECTED,,False,PARSER_REJECTION_MALFORMED,Structural scale or grammar malformation in transcript '[unk] ten',Spoken as natural 'and ten' / 'hundred ten' (96.24-96.72s).
+57,faster-whisper-tiny,110,HIGH,in 10.,in 10,REJECTED,,False,PARSER_REJECTION_MALFORMED,Structural scale or grammar malformation in transcript 'in 10.',Spoken as natural 'and ten' / 'hundred ten' (96.24-96.72s).
+58,vosk,175,MEDIUM,,,REJECTED,,False,PARSER_REJECTION_EMPTY,ASR produced empty transcript,Spoken as natural 'hundred seventy five' (97.44-98.34s).
+58,faster-whisper-tiny,175,MEDIUM,175.,175,SUCCESS,175,True,CORRECT,Exact integer match,Spoken as natural 'hundred seventy five' (97.44-98.34s).
+59,vosk,1000,HIGH,thousand,thousand,SUCCESS,1000,True,CORRECT,Exact integer match,Spoken as natural 'thousand' (98.61-99.24s).
+59,faster-whisper-tiny,1000,HIGH,1000,1000,SUCCESS,1000,True,CORRECT,Exact integer match,Spoken as natural 'thousand' (98.61-99.24s).
+60,vosk,25,HIGH,twenty five,twenty five,SUCCESS,25,True,CORRECT,Exact integer match,Spoken as 'twenty five' (99.84-100.62s).
+60,faster-whisper-tiny,25,HIGH,25.,25,SUCCESS,25,True,CORRECT,Exact integer match,Spoken as 'twenty five' (99.84-100.62s).
+61,vosk,60,MEDIUM,sixteen,sixteen,SUCCESS,16,False,CONFUSABLE_PAIR,Acoustic confusion on confusable/tens (60 vs 16) -> parsed as 16,Spoken as 'sixty' / 'sixteen' (101.13-101.94s).
+61,faster-whisper-tiny,60,MEDIUM,60.,60,SUCCESS,60,True,CORRECT,Exact integer match,Spoken as 'sixty' / 'sixteen' (101.13-101.94s).
+62,vosk,1500,HIGH,fifteen hundred,fifteen hundred,SUCCESS,1500,True,CORRECT,Exact integer match,Spoken as teen-hundred 'fifteen hundred' (102.48-103.35s).
+62,faster-whisper-tiny,1500,HIGH,1500.,1500,SUCCESS,1500,True,CORRECT,Exact integer match,Spoken as teen-hundred 'fifteen hundred' (102.48-103.35s).
