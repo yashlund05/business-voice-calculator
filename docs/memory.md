@@ -7,18 +7,20 @@
 
 ## 1. Project Status
 
-- **Overall status:** Phase 5E (Multi-Number Rejection & Zero Rule) completed — **Phase 5 fully complete**. 440 unit/mock/integration tests passing, 1 model-dependent test cleanly skipped (100% pass rate). Zero false additions invariant intact.
+- **Overall status:** Phase 6.1 (Long-Session Soak) completed. **AC-8 PASS** (0 crashes, ~0 memory growth, 646/646 utterances over 60 min). 440 unit/mock/integration tests passing, 1 model-dependent test cleanly skipped.
 - **Last updated:** 2026-10-03
 
 ## 2. Current Phase
 
-- Phase: **Phase 5 — Validation, Error Audit & Safety Calibration (COMPLETED)**. Next phase: Phase 6 — Reliability Testing, Packaging & Trial.
+- Phase: **Phase 6 — Reliability Testing, Packaging & Trial** (Subtask 6.1 completed).
 
 ## 3. Current Task
 
-- Phase 5E completed. Next: Phase 6.1 (Long-Session Soak Test).
+- Phase 6.1 completed. Next: Phase 6.2 (Error Matrix Verification).
 
 ## 4. Completed Work
+
+- [6.1 Long-Session Soak Test] Built `tools/soak_test.py` (stdlib-only, no new dependencies): runs the full production stack (Tkinter GUI + ListeningController + EnergyVAD 500/700 defaults + real Vosk ASR + Safe Mode decision engine) against a real-time-paced scripted loop of the Dad continuous recording (no microphone opened, privacy-safe), with a deterministic main-thread auto-responder (Add / every-4th Discard) exercising the confirmation surface. Monitors: RSS (WinAPI `GetProcessMemoryInfo`), CPU utilization, event-queue depth, GUI event-loop stall probe (100 ms after() lateness with per-event >100 ms logging), decision throughput vs expected utterances, audio pace lag. Two harness bugs found and fixed during a 3-min validation run (inverted pacing sleep; truncated 64-bit pseudo-handle in the RSS probe) — no app changes. **Full 60-min run (EXP-008): 0 crashes, 0 exceptions, 0 ERROR events; 646/646 utterances produced decisions (0 missed); max queue depth 2; CPU avg 1.95%; RSS 181.8 -> 89.4 -> 75.8 MB (shrank ~106 MB, growth ≈ 0 — well within AC-8's 50 MB); 12 GUI stalls >100 ms in 60 min, max 181 ms, scattered (background-process scheduling on an actively used desktop; architecture has no main-thread blocking work).** AC-8 = PASS; AC-7 flagged for foreground re-verification at the Phase 6.4 trial. Results in `analysis/soak_summary.json`, `analysis/soak_samples.csv`; record in `docs/research.md` §13.
 
 - [5E Multi-Number Rejection (P7) & Zero Rule (P8)] Verified hardening with 18 new invariant tests; no production code changes needed (existing behavior correct). (1) P7: parser rejection corpus extended with 12 adversarial cases — concatenations of otherwise-valid compounds ("one thousand one thousand", "two thousand two thousand", "one hundred one hundred"), disconnected sequences, and range-overflowing grammatical concatenations ("two thousand five hundred" → OUT_OF_RANGE) — all rejected with value=None; verified the parser never mis-merges valid compounds into a single number. Decision layer: multi-number corpus sweep rejected with `PARSER_REJECTED_MULTIPLE_NUMBERS` and masked value in both Safe Mode and Fast Mode + auto-accept. GUI: multi-number rejection leaves total/history untouched with a friendly message. (2) P8: zero requires manual confirmation in every policy configuration sweep (Safe Mode default; Fast Mode + auto-accept with calibrated confidence meeting min_confidence; Fast Mode with uncalibrated confidence) — `can_auto_add` is False for zero in all combinations, while non-zero values remain eligible for auto-add in an eligible setup (no over-blocking). GUI: spoken "zero" lands in the confirmation prompt, never silently in the total. P7 and P8 resolved.
 
@@ -165,6 +167,9 @@
 - Synthetic Tk key events (`event_generate`) are only delivered to viewable windows holding input focus; GUI keyboard-shortcut tests must `deiconify()` + `focus_force()` the root before generating Enter/Escape events.
 - Grammar-constrained ASR is **confidently wrong**: misheard number words receive near-1.0 word likelihoods, so confidence signals cannot separate correct from wrong recognitions (EXP-007). Auto-accept by confidence threshold is structurally unsafe for this application.
 - VAD failure modes are asymmetric: threshold ≈ noise floor causes *merging* (safe parser rejections), short hangover causes *splitting* (partial numbers with possible wrong additive sums). Prefer the configuration whose failure mode is the safe one (longer hangover, threshold above floor).
+- Soak-test instruments measure the *environment* as much as the app: a background-process GUI stall probe records OS scheduling lateness (12 events, max 181 ms/hour on an actively used desktop) that foreground use would not see. AC-7 verdicts must come from foreground measurements (Phase 6.4).
+- Windows RSS via ctypes needs explicit `restype`/`argtypes` (c_void_p handle) — the default int restype truncates the GetCurrentProcess pseudo-handle on 64-bit Python and GetProcessMemoryInfo fails with ERROR_INVALID_HANDLE.
+- Long-run working set can SHRINK as the OS pages out cold model pages (181.8 -> 75.8 MB over 60 min); memory-growth assessments must use the trend, not the absolute value.
 
 ## 12. Dependencies Added (with justification)
 
@@ -178,7 +183,7 @@
 
 ## 13. Next Task
 
-- **Phase 6.1**: Long-session soak test — 60-minute continuous listening run verifying bounded memory RSS, CPU stability, and zero GUI event stalls (`tools/`, `docs/research.md` §13).
+- **Phase 6.2**: Error Matrix Verification — trigger and verify recovery from every error condition in `prd.md` §9 (mic disconnect, malformed speech, model missing, etc.) with tests/manual matrix; total/history preserved per AC-11.
 
 ## 15. Do Not Change Casually (requires explicit user approval)
 

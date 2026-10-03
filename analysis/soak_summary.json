@@ -1,0 +1,81 @@
+{
+  "date": "2026-10-03 13:41:16",
+  "duration_s": 3600.9,
+  "commit": "5a0b3a4",
+  "mode": "gui",
+  "crashes": [],
+  "max_queue_depth": 2,
+  "rss_start_mb": 181.8,
+  "rss_30min_mb": 89.4,
+  "rss_end_mb": 75.8,
+  "rss_growth_mb_since_warmup": -110.0,
+  "cpu_percent_avg": 1.95,
+  "cpu_percent_max": 29.59,
+  "max_gui_stall_ms": 181.0,
+  "stalls_over_100ms": [
+    {
+      "elapsed_s": 55.7,
+      "stall_ms": 103.0
+    },
+    {
+      "elapsed_s": 295.7,
+      "stall_ms": 119.0
+    },
+    {
+      "elapsed_s": 1143.8,
+      "stall_ms": 135.0
+    },
+    {
+      "elapsed_s": 1275.9,
+      "stall_ms": 118.0
+    },
+    {
+      "elapsed_s": 1280.5,
+      "stall_ms": 134.0
+    },
+    {
+      "elapsed_s": 1345.1,
+      "stall_ms": 135.0
+    },
+    {
+      "elapsed_s": 1474.1,
+      "stall_ms": 134.0
+    },
+    {
+      "elapsed_s": 1684.1,
+      "stall_ms": 135.0
+    },
+    {
+      "elapsed_s": 1707.2,
+      "stall_ms": 103.0
+    },
+    {
+      "elapsed_s": 2707.6,
+      "stall_ms": 181.0
+    },
+    {
+      "elapsed_s": 2825.0,
+      "stall_ms": 103.0
+    },
+    {
+      "elapsed_s": 2895.8,
+      "stall_ms": 103.0
+    }
+  ],
+  "event_counts": {
+    "STARTED": 1,
+    "PROCESSING": 646,
+    "DECISION": 646,
+    "STOPPED": 1
+  },
+  "error_events": 0,
+  "adds": 26,
+  "discards": 8,
+  "undos": 0,
+  "loops_completed": 34,
+  "expected_utterances": 646,
+  "decisions_processed": 646,
+  "missed_utterances": 0,
+  "pace_lag_max_ms": 1516.0,
+  "samples": 719
+}
