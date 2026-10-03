@@ -214,18 +214,18 @@ Not in scope: everything in Non-Goals and Future Enhancements.
 
 ## 13. Measurable Acceptance Criteria
 
-Targets marked **PROVISIONAL** are initial proposals; they must be reviewed and ratified by the user in the Phase 3 ADR (`research.md`). Never claim a target is met without a recorded measurement.
+Targets marked **PROVISIONAL** are initial proposals; they must be reviewed and ratified by the user in a gate ADR (`research.md`). Never claim a target is met without a recorded measurement. On 2026-10-03 the Phase 5C gate (ADR-004) **ratified AC-4, AC-6, and AC-8 as written and amended AC-5** (the former absolute ≤20% bar is unattainable under the mandated confirm-all policy — see `research.md` §12 ADR-004).
 
 | ID | Criterion | Measure |
 |----|-----------|---------|
 | AC-1 | Parser correctness | 100% of parser corpus passes: every integer 0–2000 round-trips from canonical word forms; all accepted variants in §7; all rejection cases in §7. |
 | AC-2 | Arithmetic correctness | Calculation/undo/reset property-style tests pass; total always equals sum of non-undone accepted entries. |
 | AC-3 | No silent doubtful additions | Decision engine tests prove: parse failure → REJECT; zero → CONFIRM; any rule-flagged uncertainty → CONFIRM/REJECT, never ACCEPT. |
-| AC-4 | False Addition Rate (PROVISIONAL) | **0** wrong values added without user confirmation on a held-out test set of **≥ 500** utterances (target speaker, quiet room). Report N and the 95% upper bound (≈ 3/N when 0 errors). A non-zero result fails AC-4 and triggers redesign of thresholds/policy. |
-| AC-5 | Usability (PROVISIONAL) | Combined CONFIRM + REJECT rate on valid in-range test utterances ≤ 20%. If exceeded, report it and the trade-off; do not relax AC-4 to compensate. |
-| AC-6 | Latency (PROVISIONAL) | End-of-speech to UI result: p95 ≤ 1.5 s, max ≤ 3 s on target laptop. |
+| AC-4 | False Addition Rate (RATIFIED, ADR-004) | **0** wrong values added without user confirmation on a held-out test set of **≥ 500** utterances (target speaker, quiet room). Report N and the 95% upper bound (≈ 3/N when 0 errors). A non-zero result fails AC-4 and triggers redesign of thresholds/policy. |
+| AC-5 | Usability (AMENDED, ADR-004) | Combined CONFIRM + REJECT rate on valid in-range utterances is **measured and reported** at the Phase 6.4 real-user trial. No absolute numeric bar until/unless Phase 5D (ADR-003) validates an auto-accept policy; AC-4 remains the inviolable safety bar and is never relaxed to compensate. |
+| AC-6 | Latency (RATIFIED, ADR-004) | End-of-speech to UI result: p95 ≤ 1.5 s, max ≤ 3 s on target laptop. |
 | AC-7 | Responsiveness | No GUI event-loop stall > 100 ms during listening/recognition (measured). |
-| AC-8 | Stability (PROVISIONAL) | 60-minute continuous session: no crash; memory growth reported and ≤ 50 MB. |
+| AC-8 | Stability (RATIFIED, ADR-004) | 60-minute continuous session: no crash; memory growth reported and ≤ 50 MB. |
 | AC-9 | Offline | App runs with network disabled; no outbound connection attempts observed. |
 | AC-10 | No voice commands | Test: non-number words (incl. "undo", "stop", "yes") produce REJECT and no state change. |
 | AC-11 | Error recovery | Each error in §9 is triggered in manual testing; total/history preserved. |

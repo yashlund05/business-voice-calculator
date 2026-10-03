@@ -196,7 +196,7 @@ The interface is the only coupling between recognition and the rest of the app. 
 - **Offline Invariant:** Strictly uses local model files (`local_files_only=True`); no runtime downloading or network calls. Missing models raise typed `ModelMissingError`.
 - **Uncalibrated Confidence Invariant:** Faster-whisper raw segment logprobs or token probabilities are uncalibrated and returned as `confidence = None`. Under both Safe Mode and Fast Mode, `SafetyDecisionEngine` forces `requires_confirmation = True`. Automatic addition remains disabled (`AUTO_ACCEPT_ENABLED = False`).
 - **Punctuation Normalization:** Cleans thousands-separator commas (e.g. `"1,500"` -> `"1500"`) and converts speech pause commas to spaces before parsing with `numparse.py`.
-- **Engine Status:** **Vosk small remains the default application engine.** faster-whisper is integrated strictly as an offline candidate for comparative evaluation on the real speech dataset.
+- **Engine Status (ADR-001, 2026-10-03):** **Vosk small English + constrained number-word grammar is the ratified default application engine.** faster-whisper (`tiny.en`) is retained as a modular, benchmarkable candidate only (`tools/benchmark.py --engine faster-whisper`); the hybrid cross-check (Option C) is not adopted for MVP. Full evidence and rationale: `research.md` §12 ADR-001.
 
 ## 8. Number Parser and Validation Design
 
@@ -355,8 +355,8 @@ The desktop GUI layer (`voice_calculator.gui`) provides the Windows desktop user
 
 ## 16. Decisions Requiring Benchmark Evidence [BENCH]
 
-- Which ASR engine (A, B, or hybrid C) and model size.
-- Whether any second-pass/agreement check is worth its cost.
+- ~~Which ASR engine (A, B, or hybrid C) and model size.~~ **RESOLVED — ADR-001 (2026-10-03):** Option A (Vosk small English + constrained number grammar) is the default deployed engine; faster-whisper stays a modular benchmarkable candidate; hybrid not adopted for MVP.
+- Whether any second-pass/agreement check is worth its cost. (Still open; oracle union 73.8% measured in EXP-004, no selection signal yet.)
 - VAD choice (energy vs Silero) and all segmentation timings.
 - Any auto-accept rule and its thresholds (default: none; confirm-all).
 - Whether ASR confidence is useful as a signal at all.

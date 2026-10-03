@@ -7,18 +7,21 @@
 
 ## 1. Project Status
 
-- **Overall status:** Phase 5B (Confirmation & Recovery Reliability) completed. 422 unit/mock/integration tests passing, 1 model-dependent test cleanly skipped (100% pass rate). Zero false additions invariant intact.
+- **Overall status:** Phase 5C (ASR Model ADR / P2) completed. 422 unit/mock/integration tests passing, 1 model-dependent test cleanly skipped (100% pass rate). Zero false additions invariant intact.
 - **Last updated:** 2026-10-03
 
 ## 2. Current Phase
 
-- Phase: **Phase 5 — Validation, Error Audit & Safety Calibration** (Subtasks 5A and 5B completed).
+- Phase: **Phase 5 — Validation, Error Audit & Safety Calibration** (Subtasks 5A, 5B, 5C completed).
 
 ## 3. Current Task
 
-- Phase 5B completed. Next: Phase 5C (ASR Model ADR / P2).
+- Phase 5C completed. Next: Phase 5D (VAD Calibration P3 & Auto-Accept Rules P4).
 
 ## 4. Completed Work
+
+- [5C ASR Model ADR (P2)] Formalized ADR-001 in `docs/research.md` §12 and marked it ACCEPTED: **Vosk small English + constrained number-word grammar is the default deployed ASR engine**; faster-whisper `tiny.en` remains a modular, benchmarkable candidate; hybrid cross-check not adopted for MVP (oracle 73.8% requires a per-utterance selection signal that does not exist; would double latency/memory for unproven benefit). Rationale from measured evidence (EXP-002/003/004/005): lowest wrong-value risk profile (7/61 vs 8/61, dominated by safely rejected structures vs tiny.en's word drops and hallucinated digits), 12–14× lower median latency, ~2× less RAM, grammar-constrained output bounds hallucination. Updated `docs/architecture.md` §7 Engine Status and §16 [BENCH] decisions; updated research objectives R1/R2/R3 statuses. Pending decision P2 resolved. No source code changes.
+- [5C Gate: ADR-004 Target Ratification (P5)] User ratified the PROVISIONAL targets at the Phase 5C gate: **AC-4 (0 false additions, ≥500-utterance held-out set), AC-6 (latency), AC-8 (stability) ratified as written; AC-5 (≤20% confirm+reject) amended** to a measured-and-reported trial metric, because confirm-all makes CONFIRM+REJECT 100% by construction and even the 73.8% two-engine oracle cannot reach the 80% auto-add accuracy the old bar implied. `docs/prd.md` §13 updated; ADR-004 recorded in `docs/research.md` §12. Pending decision P5 resolved.
 
 - [5B Confirmation & Recovery Reliability] Added 28 reliability invariant tests across `tests/test_gui.py` (20), `tests/test_decision.py` (4), and `tests/test_controller.py` (4). Coverage: confirmation guards (double-confirm adds once, double-discard, stale Add/Discard blocked), candidate replacement (newer pending candidate supersedes older; superseded value never added), abnormal-event recovery (ERROR/STOPPED/STARTED events discard pending candidate and hide confirmation buttons; Start re-enabled after errors), full LIFO undo reversibility through the GUI confirm flow with total==sum(history) invariant, plain-language message mapping for every abnormal `DecisionReason` with internal-reason-code leakage checks, keyboard shortcut delivery tests, decision-layer defense-in-depth (PARSED-with-no-value fail-safe, out-of-range boundary check, value-masking sweep over all abnormal statuses and all `RejectReason` values, zero rule in default Safe Mode), and controller recovery (audio factory failure, generic engine-load failure, stop during in-flight ASR discards result, ASR crash contained as REPEAT). Tests exposed a genuine GUI recovery defect: ERROR/STOPPED events left the confirmation prompt and Add/Discard buttons visible with an orphaned pending candidate. Fixed minimally in `src/voice_calculator/gui/app.py` via `_clear_pending_confirmation()` called on STARTED/STOPPED/ERROR events. All 422 tests passing.
 
@@ -58,7 +61,7 @@
 
 - Architecture foundation laid per `architecture.md`.
 - Modules that exist in code: `voice_calculator.config`, `voice_calculator.logging_setup`, `voice_calculator.numparse`, `voice_calculator.audio.capture`, `voice_calculator.audio.wavio`, `voice_calculator.audio.vad`, `voice_calculator.audio.segmenter`, `voice_calculator.asr.base`, `voice_calculator.asr.vosk_engine`, `voice_calculator.asr.whisper_engine`, `voice_calculator.benchmark`, `voice_calculator.pipeline`, `voice_calculator.decision`, `voice_calculator.calculator`, `voice_calculator.controller`, `voice_calculator.gui`.
-- Chosen ASR engine: **Vosk small English + constrained grammar baseline** (pending Phase 5C ADR).
+- Chosen ASR engine: **Vosk small English + constrained grammar baseline** (ratified by ADR-001, 2026-10-03; faster-whisper retained as modular benchmarkable candidate, hybrid not adopted for MVP).
 - VAD: **EnergyVAD baseline (500.0 RMS threshold, 250ms pre-roll, 700ms hangover, 250ms min utterance, 6000ms max utterance)** (pending Phase 5D calibration).
 - Operating Mode default: **Safe Mode** (`OperatingMode.SAFE`); auto-accept policy is **off** (`AUTO_ACCEPT_ENABLED = False`).
 
@@ -90,16 +93,18 @@
 | 22 | Deployment philosophy is strictly LOW-END-FIRST: CPU-only execution on older/budget Windows laptops is the primary deployment path; no mandatory GPU/CUDA/RTX; GPU acceleration is an optional optimization only; accuracy and safety must never be compromised for speed; minimum specs must be experimentally measured | 2026-10-02 | Low-End Strategy Directive |
 | 23 | Phase 4E (New Natural-Speed Recordings) is cancelled due to user time constraints; Phase 5 roadmap proceeds using the existing 61-sample Dad baseline dataset and synthetic stress testing | 2026-10-02 | Phase 5.0 Roadmap Directive |
 | 24 | Confirmation UI recovery invariant: any STARTED, STOPPED, or ERROR controller event discards the pending candidate and hides the Add/Discard buttons; confirmation actions are guarded by AWAITING_CONFIRMATION state so stale Add/Discard interactions can never modify the total | 2026-10-03 | Phase 5B implementation |
+| 25 | ADR-001 (P2): Vosk small English + constrained number-word grammar is the default deployed ASR engine; faster-whisper `tiny.en` remains a modular benchmarkable candidate (not default); hybrid cross-check not adopted for MVP. Evidence: EXP-002/003/004/005 (lower wrong-value risk, 12–14× latency advantage, ~2× less RAM, grammar-bounded hallucination) | 2026-10-03 | `research.md` §12 ADR-001 |
+| 26 | ADR-004 (P5): AC-4, AC-6, AC-8 ratified as written; AC-5 amended to "measured and reported at the Phase 6.4 trial" — the absolute ≤20% confirm+reject bar is unattainable under confirm-all (100% by construction; even the 73.8% oracle union < the 80% auto-add accuracy it implied). AC-4 is never relaxed to compensate for usability | 2026-10-03 | `research.md` §12 ADR-004 (user-selected "Amend AC-5") |
 
 ## 7. Pending Decisions
 
 | # | Question | Default for now | Resolve in |
 |---|----------|-----------------|-----------|
 | P1 | Python version | **Resolved: 3.11.9** | Phase 0 |
-| P2 | ASR engine/model (Vosk vs faster-whisper) | Vosk + grammar baseline | Phase 5C ADR |
+| P2 | ASR engine/model (Vosk vs faster-whisper) | **Resolved: Vosk small + grammar (ADR-001, 2026-10-03)** | Phase 5C |
 | P3 | VAD choice and timings | EnergyVAD (500 RMS threshold, 250ms pre-roll, 700ms hangover) | Phase 5D calibration |
 | P4 | Auto-accept rules/thresholds | None (confirm-all default) | Phase 5D |
-| P5 | Ratify PROVISIONAL targets in `prd.md` §13 | As written | Phase 5C gate |
+| P5 | Ratify PROVISIONAL targets in `prd.md` §13 | **Resolved: AC-4/6/8 ratified; AC-5 amended (ADR-004, 2026-10-03)** | Phase 5C gate |
 | P6 | Accept natural hundred/thousand forms | **Resolved: Accepted** | Phase 4C |
 | P7 | Multiple numbers per utterance | Reject (`MULTIPLE_NUMBERS`) | Phase 5E |
 | P8 | Zero requires confirmation | Yes (always confirm) | Phase 5E |
