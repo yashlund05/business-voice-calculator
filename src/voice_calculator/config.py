@@ -4,11 +4,29 @@ All tunables, limits, and system constants live here.
 No other module should define magic numbers or hardcoded tunable constants.
 """
 
+import os
+import sys
 from pathlib import Path
 from dataclasses import dataclass
 
+
+def _resolve_app_root() -> Path:
+    """Resolves the root directory that holds bundled app data (models/).
+
+    Development: the repository root (config.py lives in src/voice_calculator/).
+    PyInstaller onedir build: the bundle data root (sys._MEIPASS, i.e. the
+    _internal/ folder next to the exe) where build_spec collects models/.
+    """
+    if getattr(sys, "frozen", False):
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            return Path(meipass)
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent.parent.parent
+
+
 # Project Root Directory
-PROJECT_ROOT: Path = Path(__file__).resolve().parent.parent.parent
+PROJECT_ROOT: Path = _resolve_app_root()
 
 # --- Number Range (FIXED per prd.md §5, §7) ---
 MIN_NUMBER: int = 0
@@ -44,11 +62,14 @@ MAX_CONSECUTIVE_RECOGNITION_ERRORS: int = 5
 UI_POLL_INTERVAL_MS: int = 50  # Tkinter after() poll interval
 
 # --- Directory Names & Model Paths (Git-ignored local storage per architecture.md §4, §13) ---
-LOG_DIR_PATH: Path = PROJECT_ROOT / "logs"
+# Logs live next to the exe in a packaged build (user-visible, writable when
+# the one-folder app is extracted to a user location); repo logs/ in dev.
+if getattr(sys, "frozen", False):
+    LOG_DIR_PATH: Path = Path(sys.executable).resolve().parent / "logs"
+else:
+    LOG_DIR_PATH: Path = PROJECT_ROOT / "logs"
 DATA_DIR_PATH: Path = PROJECT_ROOT / "data"
 MODELS_DIR_PATH: Path = PROJECT_ROOT / "models"
-
-import os
 
 VOSK_DEFAULT_MODEL_NAME: str = "vosk-model-small-en-us"
 VOSK_MODEL_PATH: Path = Path(os.environ.get("VOICE_CALC_VOSK_MODEL_PATH", MODELS_DIR_PATH / VOSK_DEFAULT_MODEL_NAME))

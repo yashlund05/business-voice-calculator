@@ -26,9 +26,10 @@ share/python-wheels/
 *.egg
 MANIFEST
 
-# PyInstaller
+# PyInstaller (build_spec/*.spec is the tracked build recipe)
 *.manifest
 *.spec
+!build_spec/*.spec
 
 # Virtual Environments
 .venv/

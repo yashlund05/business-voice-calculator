@@ -7,18 +7,20 @@
 
 ## 1. Project Status
 
-- **Overall status:** Phase 6.2 (Error Matrix Verification) completed — all 7 prd.md §9 error conditions verified with total/history preservation (AC-11). 449 unit/mock/integration tests passing, 1 model-dependent test cleanly skipped.
+- **Overall status:** Phase 6.3 (Windows Packaging, P9) completed — one-folder build verified (8/8 checks PASS). 451 unit/mock/integration tests passing, 1 model-dependent test cleanly skipped.
 - **Last updated:** 2026-10-03
 
 ## 2. Current Phase
 
-- Phase: **Phase 6 — Reliability Testing, Packaging & Trial** (Subtasks 6.1–6.2 completed).
+- Phase: **Phase 6 — Reliability Testing, Packaging & Trial** (Subtasks 6.1–6.3 completed).
 
 ## 3. Current Task
 
-- Phase 6.2 completed. Next: Phase 6.3 (Windows Packaging, P9).
+- Phase 6.3 completed. Next: Phase 6.4 (Clean-Machine Trial & User Acceptance).
 
 ## 4. Completed Work
+
+- [6.3 Windows Packaging (P9)] Built and verified the portable one-folder Windows distribution (`build_spec/voice_calculator.spec`, ADR-005 accepted). Bundle: `VoiceCalculator.exe` + `_internal/` (Python runtime, vosk + PortAudio native DLLs, bundled `models/vosk-model-small-en-us`); 176.8 MB; faster-whisper excluded (ADR-001); UPX off; console=False. `tools/verify_package.py` verifies layout, bundled model files, native DLLs, frozen-path model resolution (simulated `sys.frozen`), and GUI launch smoke — 8/8 PASS on the built bundle. Two real defects found and fixed during packaging: (1) `config.py` resolved PROJECT_ROOT from `__file__` parents, which in a frozen build points at the exe folder, so the model bundled under `_internal/` was never found — config is now frozen-aware (bundled data from `sys._MEIPASS`, logs next to the exe), with a subprocess regression test (`test_frozen_app_path_resolution`); (2) `logging_setup.py` crashed at startup if the log directory could not be created — file logging is now best-effort (read-only install locations degrade to console-only), with a regression test. README documents build/verify/distribute steps.
 
 - [6.2 Error Matrix Verification] Built the full prd.md §9 verification matrix (`analysis/error_matrix.md`): all 7 error situations triggered deterministically via fakes/mocks with total/history preservation asserted (AC-11). Audit exposed 3 genuine spec gaps, closed minimally with regression tests: (1) typed mic-start errors — `MicNotFound`/`MicBusy` at `source.start()` now surface as typed ERROR events instead of "Unexpected background error", enabling the GUI to show the exact prd-mandated plain messages (`controller.py`); (2) model-missing now **disables Start** while Undo/Reset remain usable, per prd (`gui/app.py`); (3) the prd-mandated **5-consecutive-recognition-failure stop** was never enforced — `MAX_CONSECUTIVE_RECOGNITION_ERRORS` existed only in config; the controller now stops the session after 5 consecutive `ASR_ERROR` decisions with a plain restart-guidance message, counter resetting on success (`controller.py`). New plain-language error-event mapping added to `gui/messages.py` (`ERROR_EVENT_MESSAGES`/`get_error_event_message`). 9 new tests (4 controller, 5 GUI); suite 449 passed / 1 skipped. Hardware-level variants (physical unplug, real privacy toggle, model deletion on packaged build) deferred to the 6.4 manual trial.
 
@@ -109,6 +111,7 @@
 | 28 | ADR-003 (P4): Auto-accept remains disabled for v1; confirm-all is the shipping policy. R-CONF and R-RMS rejected (no separation: wrong values are confidently wrong, med word-conf 1.000); R-AGREE (dual-engine same-value agreement: 28/61, 0 wrong, bound ~10.7%) deferred pending calibration+held-out test datasets and cost analysis | 2026-10-03 | `research.md` §12 ADR-003, EXP-007 |
 | 29 | P7: Utterances containing multiple disconnected numbers are always rejected (`RejectReason.MULTIPLE_NUMBERS` / documented `AMBIGUOUS`/`MALFORMED` sequence variants) with value masking, in both Safe Mode and Fast Mode; concatenations of valid compounds never evaluate to a single number | 2026-10-03 | Phase 5E verification (parser corpus + decision/GUI invariant tests) |
 | 30 | P8: Spoken zero always requires manual confirmation (`ZERO_REQUIRES_CONFIRMATION = True`); zero can never auto-add in any mode/policy combination, even with calibrated confidence meeting the threshold; non-zero auto-accept eligibility is unaffected | 2026-10-03 | Phase 5E verification (decision/GUI invariant tests) |
+| 31 | ADR-005 (P9): One-folder (onedir) PyInstaller packaging — `VoiceCalculator.exe` + `_internal/` with bundled Vosk model and native DLLs; one-file rejected (multi-second temp unpack per launch on low-end hardware, AV friction); distribution is portable, extract to a user-writable folder, fully offline; faster-whisper excluded from the bundle | 2026-10-03 | `research.md` §12 ADR-005, Phase 6.3 |
 
 ## 7. Pending Decisions
 
@@ -122,7 +125,7 @@
 | P6 | Accept natural hundred/thousand forms | **Resolved: Accepted** | Phase 4C |
 | P7 | Multiple numbers per utterance | **Resolved: always rejected — MULTIPLE_NUMBERS (documented AMBIGUOUS/MALFORMED variants), value masked (2026-10-03)** | Phase 5E |
 | P8 | Zero requires confirmation | **Resolved: Yes — zero always requires manual confirmation in all modes (2026-10-03)** | Phase 5E |
-| P9 | PyInstaller one-folder vs one-file | One-folder | Phase 6.3 |
+| P9 | PyInstaller one-folder vs one-file | **Resolved: one-folder (ADR-005, 2026-10-03)** | Phase 6.3 |
 
 ## 8. Known Bugs
 
@@ -130,8 +133,8 @@
 
 ## 9. Test Status
 
-- Automated tests: **449 passed, 1 skipped, 0 failed** (`pytest`).
-- Last test command/result: `.\.venv\Scripts\pytest.exe` -> 449 passed, 1 skipped in 21.79s (test_asr_base: 7, test_audio_capture: 9, test_benchmark: 23, test_calculator: 31, test_config: 5, test_controller: 17, test_decision: 34, test_gui: 48, test_logging: 3, test_numparse_cases: 189, test_numparse_exhaustive: 10, test_pipeline: 15, test_segmenter: 13, test_smoke: 2, test_vad: 8, test_vosk_engine: 11, test_wavio: 10, test_whisper_engine: 14 passed + 1 skipped).
+- Automated tests: **451 passed, 1 skipped, 0 failed** (`pytest`).
+- Last test command/result: `.\.venv\Scripts\pytest.exe` -> 451 passed, 1 skipped in 11.86s (test_asr_base: 7, test_audio_capture: 9, test_benchmark: 23, test_calculator: 31, test_config: 6, test_controller: 17, test_decision: 34, test_gui: 48, test_logging: 4, test_numparse_cases: 189, test_numparse_exhaustive: 10, test_pipeline: 15, test_segmenter: 13, test_smoke: 2, test_vad: 8, test_vosk_engine: 11, test_wavio: 10, test_whisper_engine: 14 passed + 1 skipped).
 
 ## 10. Benchmark Status
 
@@ -174,12 +177,15 @@
 - Long-run working set can SHRINK as the OS pages out cold model pages (181.8 -> 75.8 MB over 60 min); memory-growth assessments must use the trend, not the absolute value.
 - Error-recovery wording is a product requirement, not a nicety: prd.md §9 specifies exact plain-language messages and button states per error. Routing controller ERROR events through a typed `error_type` -> message map in `messages.py` keeps GUI text spec-compliant and testable.
 - Error-recovery limiters defined in config (e.g. `MAX_CONSECUTIVE_RECOGNITION_ERRORS`) must be wired into the controller with regression tests — a config constant alone enforces nothing.
+- In a PyInstaller onedir build, `Path(__file__).parent...` from a bundled module resolves to the `_internal/` folder's parent chain differently than in development: config.py's three-parent walk landed on the exe folder, not the bundle data root. Frozen apps must resolve bundled data from `sys._MEIPASS` and user-writable paths (logs) from `sys.executable`'s folder — and this must be regression-tested by simulating `sys.frozen` in a fresh interpreter.
+- Always smoke-verify a packaged build's *runtime path resolution*, not just file presence: the first 6.3 bundle looked complete (all files present) but would have failed at Start because the frozen path logic and the bundle layout disagreed. `tools/verify_package.py` now checks both.
 
 ## 12. Dependencies Added (with justification)
 
 | Package | Version | Purpose | Why needed / alternative considered | Phase |
 |---|---|---|---|---|
 | pytest | 8.3.4 | Test framework | Automated unit and property testing; standard test runner | Phase 0 |
+| pyinstaller | 6.x (latest at build time) | Windows packaging (build-time only) | PyInstaller onedir bundle per ADR-005/AC-12; not a runtime dependency; not bundled | Phase 6.3 |
 | sounddevice | 0.5.6 | Audio capture | Low-latency, reliable PortAudio Python bindings for Windows | Phase 1C |
 | numpy | 2.4.6 | Buffer operations | Efficient audio buffer representation for sounddevice & VAD RMS | Phase 1C |
 | vosk | 0.3.45 | Offline ASR | Baseline ASR engine for English speech recognition | Phase 2.2 |
@@ -187,7 +193,7 @@
 
 ## 13. Next Task
 
-- **Phase 6.3**: Windows Packaging (P9) — PyInstaller one-folder build spec bundling models and the offline runtime; verify startup on a clean profile (`build_spec/`, `README.md`).
+- **Phase 6.4**: Clean-Machine Trial — run the packaged build on a clean Windows machine/profile without Python (AC-6/AC-9/AC-12 smoke via `tools/verify_package.py`), then conduct the real-user (father) workflow trial; includes the AC-7 foreground stall re-check and the deferred hardware error-matrix items (physical mic unplug, Windows privacy toggle, model-folder deletion).
 
 ## 15. Do Not Change Casually (requires explicit user approval)
 

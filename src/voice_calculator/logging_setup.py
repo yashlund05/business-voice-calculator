@@ -40,9 +40,6 @@ def setup_logging(
         Configured logging.Logger instance.
     """
     target_dir = log_dir or LOG_DIR_PATH
-    target_dir.mkdir(parents=True, exist_ok=True)
-
-    log_path = target_dir / log_file_name
     logger = logging.getLogger(LOGGER_NAME)
 
     # Avoid adding duplicate handlers if setup is called multiple times
@@ -57,16 +54,21 @@ def setup_logging(
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
-    # Rotating file handler
-    file_handler = RotatingFileHandler(
-        filename=str(log_path),
-        maxBytes=MAX_BYTES,
-        backupCount=BACKUP_COUNT,
-        encoding="utf-8",
-    )
-    file_handler.setLevel(level)
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
+    # Rotating file handler — best effort: a read-only install location must
+    # not prevent startup (prd.md §9: the app stays usable).
+    try:
+        target_dir.mkdir(parents=True, exist_ok=True)
+        file_handler = RotatingFileHandler(
+            filename=str(target_dir / log_file_name),
+            maxBytes=MAX_BYTES,
+            backupCount=BACKUP_COUNT,
+            encoding="utf-8",
+        )
+        file_handler.setLevel(level)
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+    except OSError as e:
+        logger.warning("File logging unavailable (%s); continuing without file logs.", e)
 
     # Optional console handler
     if console_output:

@@ -1,6 +1,7 @@
 """Tests for voice_calculator.logging_setup."""
 
 import logging
+import logging.handlers
 from voice_calculator.logging_setup import setup_logging, get_logger, LOGGER_NAME
 
 
@@ -39,3 +40,21 @@ def test_get_logger():
     """Verify get_logger returns application logger."""
     logger = get_logger()
     assert logger.name == LOGGER_NAME
+
+
+def test_logging_unwritable_log_dir_does_not_crash(tmp_path):
+    """A read-only/blocked log location degrades to logging without a file handler.
+
+    Regression test for Phase 6.3 packaging: the app must stay usable when
+    installed to a location where the log directory cannot be created
+    (prd.md §9: the app stays usable; AC-11 error recovery).
+    """
+    blocker = tmp_path / "blocked"  # A FILE where the log DIRECTORY should be
+    blocker.write_text("not a directory", encoding="utf-8")
+
+    logger = setup_logging(log_dir=blocker, log_file_name="test.log")
+
+    # Must not raise; logging still works (file handler simply absent)
+    logger.info("Message without a writable log dir")
+    assert blocker.read_text(encoding="utf-8") == "not a directory"
+    assert not any(isinstance(h, logging.handlers.RotatingFileHandler) for h in logger.handlers)

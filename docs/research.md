@@ -253,7 +253,7 @@ Record dead ends so they are not repeated.
 | ADR-002 | VAD choice and segmentation settings | **ACCEPTED** | 2026-10-03 |
 | ADR-003 | Auto-accept policy (on/off, rules) | **ACCEPTED** (auto-accept OFF for v1) | 2026-10-03 |
 | ADR-004 | Ratification of PROVISIONAL targets in `prd.md` §13 | **ACCEPTED** (AC-4/6/8 ratified; AC-5 amended) | 2026-10-03 |
-| ADR-005 | Packaging mode (one-folder vs one-file) | PENDING (Phase 6) | — |
+| ADR-005 | Packaging mode (one-folder vs one-file) | **ACCEPTED** (one-folder) | 2026-10-03 |
 
 ### ADR-001: ASR engine and model strategy (resolves pending decision P2)
 - Date: 2026-10-03
@@ -327,6 +327,17 @@ Record dead ends so they are not repeated.
 - Consequences: AC-4 (0 false additions) is enforced structurally by confirm-all, consistent with ADR-004. The interaction burden (one confirmation per number) is the accepted cost of safety; its acceptability is measured (not gated) at the Phase 6.4 trial per ADR-004's amended AC-5. `decision.py` requires no changes — the gating logic already implements this policy.
 - Residual risks: if the 6.4 trial shows the confirmation burden is unacceptable, the remedy is accuracy work (parser/ASR) or the R-AGREE path with new data — never disabling confirmation without a validated rule.
 - Approved by (user): user directive to proceed with Phase 5D, 2026-10-03.
+
+### ADR-005: Packaging mode — one-folder (resolves pending decision P9)
+- Date: 2026-10-03
+- Status: Accepted
+- Context: prd.md AC-12 requires a packaged Windows build passing smoke checks on a clean machine. P9 defaulted to PyInstaller one-folder; the choice needed formalization with evidence (Phase 6.3).
+- Options considered: one-folder (onedir) vs one-file; alternative packagers (NSIS installer, MSIX) — not required for a single-user trial tool.
+- Evidence (Phase 6.3 build, `tools/verify_package.py`): one-folder build completes in ~40 s; GUI launch smoke passes; all native dependencies (libvosk.dll + MinGW runtime, PortAudio) and the ~50 MB Vosk model bundle correctly under `_internal/`; bundle size 176.8 MB. One-file would unpack ~177 MB to a temp directory at every launch — multi-second startup on the low-end-first target hardware, recurring AV-scanner friction, and temp-space requirements; one-folder starts instantly from disk. No requirement exists for a single distributable file.
+- Decision: **One-folder (onedir) packaging via PyInstaller** (`build_spec/voice_calculator.spec`): `VoiceCalculator.exe` + `_internal/` (bundled Python runtime, vosk + PortAudio native DLLs, and `models/vosk-model-small-en-us`). faster-whisper is excluded from the bundle (ADR-001: not the default engine). UPX disabled (AV false-positive risk). `console=False`.
+- Consequences: the distribution is portable — extract to a user-writable folder and run; no installation, no Python, no network. Frozen path resolution: bundled data (models/) resolves from the PyInstaller bundle root (`sys._MEIPASS`), logs are written next to the exe (`config.py` frozen branches, regression-tested in `tests/test_config.py::test_frozen_app_path_resolution`). File logging degrades gracefully on read-only locations (`logging_setup.py`). A distribution extracted into a read-protected location (e.g. Program Files) runs but writes no log files — document "extract to a user folder" in the README.
+- Residual risks / follow-up: AC-6/AC-9/AC-12 verification on a genuinely clean machine (no Python) is the Phase 6.4 trial's job; antivirus first-run scanning may add startup delay on some machines.
+- Approved by (user): user directive to proceed with Phase 6.3, 2026-10-03 (P9 default retained).
 
 ## 13. Long-Session Stability Record (template)
 

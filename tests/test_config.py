@@ -48,3 +48,37 @@ def test_app_config_dataclass():
     assert cfg.min_utterance_ms == config.MIN_UTTERANCE_MS
     assert cfg.max_utterance_ms == config.MAX_UTTERANCE_MS
 
+
+def test_frozen_app_path_resolution(tmp_path):
+    """In a PyInstaller build, bundled data resolves to the bundle root and logs to the exe side.
+
+    Regression test for Phase 6.3: config must find models/ inside the onedir
+    bundle (_internal, exposed as sys._MEIPASS) and keep logs next to the exe.
+    Runs in a fresh interpreter so the frozen environment is simulated before
+    the config module is imported.
+    """
+    import subprocess
+    import sys as _sys
+
+    fake_internal = tmp_path / "VoiceCalculator" / "_internal"
+    fake_internal.mkdir(parents=True)
+    probe = (
+        "import sys\n"
+        f"sys.frozen = True\n"
+        f"sys._MEIPASS = r'{fake_internal}'\n"
+        f"sys.executable = r'{tmp_path / 'VoiceCalculator' / 'VoiceCalculator.exe'}'\n"
+        "import sys as s; s.path.insert(0, r'src')\n"
+        "from voice_calculator import config\n"
+        "print('ROOT', config.PROJECT_ROOT)\n"
+        "print('LOGS', config.LOG_DIR_PATH)\n"
+        "print('MODEL', config.VOSK_MODEL_PATH)\n"
+    )
+    proc = subprocess.run(
+        [_sys.executable, "-c", probe], capture_output=True, text=True, timeout=60
+    )
+    assert proc.returncode == 0, proc.stderr
+    lines = dict(line.split(" ", 1) for line in proc.stdout.strip().splitlines())
+    assert lines["ROOT"] == str(fake_internal)
+    assert lines["LOGS"] == str(tmp_path / "VoiceCalculator" / "logs")
+    assert lines["MODEL"] == str(fake_internal / "models" / "vosk-model-small-en-us")
+
